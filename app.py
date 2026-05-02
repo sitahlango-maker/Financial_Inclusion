@@ -16,15 +16,16 @@ st.title("💜 Digital Finance Access Predictor")
 BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/trained_models/"
 
 # -------------------------------
-# MODEL LOADER (CACHED + ROBUST)
+# LOAD MODELS FROM GITHUB
 # -------------------------------
-@st.cache_resource
+BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
+
 def load_model(file_name):
     url = BASE_URL + file_name
     response = requests.get(url)
 
     if response.status_code != 200:
-        st.error(f"❌ Failed to load {file_name} from GitHub")
+        st.error(f"Failed to load {file_name} from GitHub: {url}")
         st.stop()
 
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
@@ -32,7 +33,6 @@ def load_model(file_name):
         tmp_path = tmp.name
 
     return joblib.load(tmp_path)
-
 # -------------------------------
 # LOAD MODELS
 # -------------------------------
