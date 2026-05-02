@@ -11,11 +11,6 @@ st.set_page_config(page_title="Digital Finance Predictor", layout="wide")
 st.title("💜 Digital Finance Access Predictor")
 
 # -------------------------------
-# CLEAN BASE URL (FIXED STRUCTURE)
-# -------------------------------
-BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/trained_models/"
-
-# -------------------------------
 # LOAD MODELS FROM GITHUB
 # -------------------------------
 BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
