@@ -1,3 +1,5 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
 import joblib
@@ -11,23 +13,39 @@ st.set_page_config(page_title="Digital Finance Predictor", layout="wide")
 st.title("💜 Digital Finance Access Predictor")
 
 # -------------------------------
-# LOAD MODELS FROM GITHUB
+# BASE URL (GitHub RAW files)
 # -------------------------------
 BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
 
+# -------------------------------
+# MODEL LOADER (CACHED + ROBUST)
+# -------------------------------
+@st.cache_resource
 def load_model(file_name):
     url = BASE_URL + file_name
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        st.error(f"Failed to load {file_name} from GitHub: {url}")
+    
+    try:
+        response = requests.get(url, timeout=30)
+    except Exception as e:
+        st.error(f"Connection error while loading {file_name}: {e}")
         st.stop()
 
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(response.content)
-        tmp_path = tmp.name
+    if response.status_code != 200:
+        st.error(f"Failed to load {file_name} from GitHub:\n{url}")
+        st.stop()
 
-    return joblib.load(tmp_path)
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            tmp.write(response.content)
+            tmp_path = tmp.name
+
+        return joblib.load(tmp_path)
+
+    except Exception as e:
+        st.error(f"Error loading {file_name}: {e}")
+        st.stop()
+
+
 # -------------------------------
 # LOAD MODELS
 # -------------------------------
@@ -36,6 +54,7 @@ gating_model = load_model("gating_model.pkl")
 experts = load_model("experts.pkl")
 feature_names = load_model("feature_names.pkl")
 
+# Validate feature names
 if feature_names is None or len(feature_names) == 0:
     st.error("Feature names missing — check feature_names.pkl")
     st.stop()
@@ -62,11 +81,11 @@ if st.button("🔮 Predict", use_container_width=True):
     with st.spinner("Running Mixture of Experts..."):
 
         try:
-            # Gating model prediction
+            # Gating model
             pred_country = gating_model.predict(input_df)[0]
             gating_conf = gating_model.predict_proba(input_df).max(axis=1)[0]
 
-            # Select model
+            # Model selection
             if pred_country in experts and gating_conf >= 0.40:
                 final_model = experts[pred_country]
                 model_used = f"Expert ({pred_country})"
@@ -74,11 +93,11 @@ if st.button("🔮 Predict", use_container_width=True):
                 final_model = model_pooled
                 model_used = "Pooled Model"
 
-            # Prediction
+            # Final prediction
             prob = final_model.predict_proba(input_df)[0, 1]
 
             # -------------------------------
-            # RESULTS DISPLAY
+            # DISPLAY RESULTS
             # -------------------------------
             st.subheader("🎯 Prediction Result")
 
@@ -91,7 +110,7 @@ if st.button("🔮 Predict", use_container_width=True):
                 st.metric("Model Used", model_used)
                 st.metric("Gating Confidence", f"{gating_conf:.2%}")
 
-            # Status classification
+            # Interpretation
             if prob >= 0.75:
                 st.success("🟢 High Chance of Financial Access")
             elif prob >= 0.5:
