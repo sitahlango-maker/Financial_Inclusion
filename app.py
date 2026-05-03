@@ -16,7 +16,7 @@ st.title("🌍 Digital Financial Inclusion Predictor")
 st.markdown("Mixture of Experts model for predicting digital financial access in East Africa.")
 
 # ===============================
-# LOAD MODELS (ROOT DIRECTORY)
+# LOAD MODELS
 # ===============================
 BASE_DIR = os.path.dirname(__file__)
 
@@ -70,12 +70,35 @@ input_dict = {
 
 input_df = pd.DataFrame([input_dict])
 
-# Align features
 for col in feature_names:
     if col not in input_df.columns:
         input_df[col] = 0
 
 input_df = input_df[feature_names]
+
+# ===============================
+# COLOR FUNCTION (IMPROVED CONTRAST)
+# ===============================
+def color(p):
+    if p >= 0.75:
+        return "#16a34a"  # green
+    elif p >= 0.5:
+        return "#f59e0b"  # amber
+    else:
+        return "#dc2626"  # red
+
+def box(title, value, color_code):
+    st.markdown(f"""
+        <div style="
+            background-color:#0f172a;
+            padding:20px;
+            border-radius:12px;
+            text-align:center;
+            margin-bottom:10px;">
+            <h4 style="color:#ffffff;">{title}</h4>
+            <h1 style="color:{color_code};">{value:.1%}</h1>
+        </div>
+    """, unsafe_allow_html=True)
 
 # ===============================
 # PREDICTION
@@ -89,38 +112,59 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
             pred_country = gating_model.predict(input_df)[0]
             gating_conf = np.max(gating_model.predict_proba(input_df))
 
-            # Model selection
+            # Expert model
+            expert_prob = None
             if pred_country in experts and gating_conf > 0.4:
-                final_model = experts[pred_country]
+                expert_prob = experts[pred_country].predict_proba(input_df)[0, 1]
+
+            # Pooled model
+            pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
+
+            # Final selected model (unchanged logic)
+            if expert_prob is not None:
+                final_prob = expert_prob
                 model_name = f"Expert Model ({pred_country})"
             else:
-                final_model = model_pooled
+                final_prob = pooled_prob
                 model_name = "Pooled Model"
 
-            # Prediction
-            prob = final_model.predict_proba(input_df)[0, 1]
-
             # ===============================
-            # DISPLAY RESULTS
+            # RESULTS
             # ===============================
             st.markdown("## 🎯 Prediction Result")
 
             colA, colB = st.columns(2)
 
             with colA:
-                st.metric("Probability of Access", f"{prob:.1%}")
+                box("Probability of Access", final_prob, color(final_prob))
 
             with colB:
                 st.metric("Model Used", model_name)
                 st.metric("Gating Confidence", f"{gating_conf:.1%}")
 
             # Interpretation
-            if prob >= 0.75:
+            if final_prob >= 0.75:
                 st.success("🟢 High likelihood of access")
-            elif prob >= 0.50:
-                st.info("🔵 Moderate likelihood of access")
+            elif final_prob >= 0.50:
+                st.info("🟠 Moderate likelihood of access")
             else:
-                st.warning("🟠 Low likelihood — potential barriers exist")
+                st.error("🔴 Low likelihood — barriers exist")
+
+            # ===============================
+            # NEW: COMPARISON SECTION (ADDED ONLY)
+            # ===============================
+            st.markdown("## 📊 Model Comparison (Diagnostic View)")
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+                box("Pooled Model", pooled_prob, color(pooled_prob))
+
+            with c2:
+                if expert_prob is not None:
+                    box(f"Expert Model ({pred_country})", expert_prob, color(expert_prob))
+                else:
+                    st.warning("No expert model available for this country")
 
         except Exception as e:
             st.error(f"Prediction error: {e}")
