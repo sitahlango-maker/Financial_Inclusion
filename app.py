@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 # ===============================
 # PAGE CONFIG
@@ -72,7 +70,7 @@ input_dict = {
 
 input_df = pd.DataFrame([input_dict])
 
-# Align features safely
+# Align features
 for col in feature_names:
     if col not in input_df.columns:
         input_df[col] = 0
@@ -84,7 +82,7 @@ input_df = input_df[feature_names]
 # ===============================
 if st.button("🔮 Predict Digital Financial Access", type="primary"):
 
-    with st.spinner("Running Mixture of Experts model..."):
+    with st.spinner("Running model..."):
 
         try:
             # Gating model
@@ -95,86 +93,34 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
             if pred_country in experts and gating_conf > 0.4:
                 final_model = experts[pred_country]
                 model_name = f"Expert Model ({pred_country})"
-                color = "#22D3EE"
             else:
                 final_model = model_pooled
-                model_name = "Pooled Model (Fallback)"
-                color = "#F472B6"
+                model_name = "Pooled Model"
 
             # Prediction
             prob = final_model.predict_proba(input_df)[0, 1]
 
             # ===============================
-            # RESULT DISPLAY
+            # DISPLAY RESULTS
             # ===============================
             st.markdown("## 🎯 Prediction Result")
 
-            colA, colB = st.columns([2, 1])
+            colA, colB = st.columns(2)
 
             with colA:
-                st.markdown(f"""
-                <div style="padding:20px; border-radius:12px; background:#111827;">
-                    <h3>Probability of Digital Financial Access</h3>
-                    <h1 style="color:{color}; font-size:48px;">
-                        {prob:.1%}
-                    </h1>
-                </div>
-                """, unsafe_allow_html=True)
+                st.metric("Probability of Access", f"{prob:.1%}")
 
             with colB:
                 st.metric("Model Used", model_name)
                 st.metric("Gating Confidence", f"{gating_conf:.1%}")
 
-            # ===============================
-            # INTERPRETATION
-            # ===============================
+            # Interpretation
             if prob >= 0.75:
-                st.success("🟢 High likelihood of digital financial access")
+                st.success("🟢 High likelihood of access")
             elif prob >= 0.50:
                 st.info("🔵 Moderate likelihood of access")
             else:
-                st.warning("🟠 Lower likelihood — potential barriers exist")
-
-            # ===============================
-            # MODEL COMPARISON
-            # ===============================
-            st.markdown("## 🔍 Model Comparison")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
-                st.write("### Pooled Model")
-                st.progress(pooled_prob)
-                st.write(f"{pooled_prob:.1%}")
-
-            with col2:
-                if pred_country in experts:
-                    expert_prob = experts[pred_country].predict_proba(input_df)[0, 1]
-                    st.write(f"### Expert ({pred_country})")
-                    st.progress(expert_prob)
-                    st.write(f"{expert_prob:.1%}")
-                else:
-                    st.write("No expert model available")
-
-            # ===============================
-            # FEATURE IMPORTANCE
-            # ===============================
-            st.markdown("## 🏆 Feature Importance")
-
-            try:
-                importance = pd.Series(
-                    final_model.feature_importances_,
-                    index=feature_names
-                ).sort_values(ascending=False).head(10)
-
-                fig, ax = plt.subplots()
-                sns.barplot(x=importance.values, y=importance.index, ax=ax)
-                ax.set_title("Top 10 Features")
-                st.pyplot(fig)
-
-            except Exception:
-                st.info("Feature importance not available for this model.")
+                st.warning("🟠 Low likelihood — potential barriers exist")
 
         except Exception as e:
             st.error(f"Prediction error: {e}")
@@ -184,6 +130,6 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
 # ===============================
 st.markdown("---")
 st.markdown(
-    "<center>Digital Financial Inclusion Predictor • Mixture of Experts ML System</center>",
+    "<center>Digital Financial Inclusion Predictor • Mixture of Experts</center>",
     unsafe_allow_html=True
 )
