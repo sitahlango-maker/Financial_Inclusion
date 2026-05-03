@@ -13,10 +13,10 @@ st.set_page_config(
 )
 
 st.title("🌍 Digital Financial Inclusion Predictor")
-st.markdown("Mixture of Experts model for predicting digital financial access in East Africa.")
+st.markdown("Analyze digital financial access using country-specific or pooled models.")
 
 # ===============================
-# LOAD MODELS (ROOT DIRECTORY)
+# LOAD MODELS
 # ===============================
 BASE_DIR = os.path.dirname(__file__)
 
@@ -26,19 +26,25 @@ def load_models():
     gating_model = joblib.load(os.path.join(BASE_DIR, "gating_model.pkl"))
     experts = joblib.load(os.path.join(BASE_DIR, "experts.pkl"))
     feature_names = joblib.load(os.path.join(BASE_DIR, "feature_names.pkl"))
-    return model_pooled, gating_model, experts, feature_names
+    return model_pooled, experts, feature_names
 
-model_pooled, gating_model, experts, feature_names = load_models()
+model_pooled, experts, feature_names = load_models()
 
 # ===============================
-# INPUT SECTION
+# SESSION STATE (for comparison)
+# ===============================
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# ===============================
+# INPUT UI
 # ===============================
 st.subheader("👤 Enter User Profile")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    age = st.slider("Age", 18, 80, 32)
+    age = st.slider("Age", 18, 80, 30)
     gender = st.radio("Gender", ["Male", "Female"], horizontal=True)
     urbanicity = st.radio("Location", ["Rural", "Urban"], horizontal=True)
 
@@ -52,11 +58,13 @@ with col2:
     internet_use = st.radio("Uses Internet", ["No", "Yes"], horizontal=True)
 
 with col3:
-    country = st.selectbox("Country", ["KEN (Kenya)", "TZA (Tanzania)", "UGA (Uganda)"])
-    country_code = country.split()[0]
+    model_choice = st.selectbox(
+        "Select Model",
+        ["POOLED", "KEN", "TZA", "UGA"]
+    )
 
 # ===============================
-# PREPARE INPUT
+# PREP INPUT
 # ===============================
 input_dict = {
     "age": age,
@@ -65,7 +73,7 @@ input_dict = {
     "inc_q": inc_q,
     "educ": educ,
     "internet_use": 1 if internet_use == "Yes" else 0,
-    "country_code": country_code
+    "country_code": model_choice if model_choice != "POOLED" else "KEN"
 }
 
 input_df = pd.DataFrame([input_dict])
@@ -78,58 +86,88 @@ for col in feature_names:
 input_df = input_df[feature_names]
 
 # ===============================
-# PREDICTION
+# RUN MODEL
 # ===============================
-if st.button("🔮 Predict Digital Financial Access", type="primary"):
+if st.button("🔮 Run Analysis", type="primary"):
 
-    with st.spinner("Running model..."):
+    try:
+        # Select model
+        if model_choice == "POOLED":
+            model = model_pooled
+            model_name = "Pooled Model"
+            color = "#F472B6"
+        else:
+            model = experts[model_choice]
+            model_name = f"Expert Model ({model_choice})"
+            color = "#22D3EE"
 
-        try:
-            # Gating model
-            pred_country = gating_model.predict(input_df)[0]
-            gating_conf = np.max(gating_model.predict_proba(input_df))
+        prob = model.predict_proba(input_df)[0, 1]
 
-            # Model selection
-            if pred_country in experts and gating_conf > 0.4:
-                final_model = experts[pred_country]
-                model_name = f"Expert Model ({pred_country})"
-            else:
-                final_model = model_pooled
-                model_name = "Pooled Model"
+        # Save to history
+        st.session_state.history.append({
+            "Model": model_name,
+            "Probability": prob
+        })
 
-            # Prediction
-            prob = final_model.predict_proba(input_df)[0, 1]
+        # ===============================
+        # RESULT DISPLAY
+        # ===============================
+        st.markdown("## 🎯 Result")
 
-            # ===============================
-            # DISPLAY RESULTS
-            # ===============================
-            st.markdown("## 🎯 Prediction Result")
+        colA, colB = st.columns([2, 1])
 
-            colA, colB = st.columns(2)
+        with colA:
+            st.markdown(f"""
+            <div style="padding:20px; border-radius:12px; background:#111827;">
+                <h3>Probability of Access</h3>
+                <h1 style="color:{color}; font-size:48px;">
+                    {prob:.1%}
+                </h1>
+            </div>
+            """, unsafe_allow_html=True)
 
-            with colA:
-                st.metric("Probability of Access", f"{prob:.1%}")
+        with colB:
+            st.metric("Model Used", model_name)
 
-            with colB:
-                st.metric("Model Used", model_name)
-                st.metric("Gating Confidence", f"{gating_conf:.1%}")
+        # ===============================
+        # INTERPRETATION
+        # ===============================
+        if prob >= 0.75:
+            st.success("🟢 High likelihood of access")
+        elif prob >= 0.50:
+            st.info("🔵 Moderate likelihood of access")
+        else:
+            st.warning("🟠 Lower likelihood — potential barriers exist")
 
-            # Interpretation
-            if prob >= 0.75:
-                st.success("🟢 High likelihood of access")
-            elif prob >= 0.50:
-                st.info("🔵 Moderate likelihood of access")
-            else:
-                st.warning("🟠 Low likelihood — potential barriers exist")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
-        except Exception as e:
-            st.error(f"Prediction error: {e}")
+# ===============================
+# COMPARISON SECTION
+# ===============================
+st.markdown("## 📊 Comparison Panel")
+
+if len(st.session_state.history) > 0:
+
+    df_hist = pd.DataFrame(st.session_state.history)
+
+    st.dataframe(df_hist, use_container_width=True)
+
+    for i, row in df_hist.iterrows():
+        st.progress(row["Probability"])
+        st.write(f"{row['Model']} → {row['Probability']:.1%}")
+
+    if st.button("🧹 Clear Comparison"):
+        st.session_state.history = []
+
+else:
+    st.info("Run models to compare results here.")
 
 # ===============================
 # FOOTER
 # ===============================
 st.markdown("---")
 st.markdown(
-    "<center>Digital Financial Inclusion Predictor • Mixture of Experts</center>",
+    "<center>Digital Financial Inclusion Predictor • Model Explorer</center>",
     unsafe_allow_html=True
 )
