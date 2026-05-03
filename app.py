@@ -23,7 +23,6 @@ BASE_DIR = os.path.dirname(__file__)
 @st.cache_resource
 def load_models():
     model_pooled = joblib.load(os.path.join(BASE_DIR, "model_pooled.pkl"))
-    gating_model = joblib.load(os.path.join(BASE_DIR, "gating_model.pkl"))
     experts = joblib.load(os.path.join(BASE_DIR, "experts.pkl"))
     feature_names = joblib.load(os.path.join(BASE_DIR, "feature_names.pkl"))
     return model_pooled, experts, feature_names
@@ -31,7 +30,7 @@ def load_models():
 model_pooled, experts, feature_names = load_models()
 
 # ===============================
-# SESSION STATE (for comparison)
+# SESSION STATE
 # ===============================
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -95,11 +94,9 @@ if st.button("🔮 Run Analysis", type="primary"):
         if model_choice == "POOLED":
             model = model_pooled
             model_name = "Pooled Model"
-            color = "#F472B6"
         else:
             model = experts[model_choice]
             model_name = f"Expert Model ({model_choice})"
-            color = "#22D3EE"
 
         prob = model.predict_proba(input_df)[0, 1]
 
@@ -110,40 +107,48 @@ if st.button("🔮 Run Analysis", type="primary"):
         })
 
         # ===============================
-        # RESULT DISPLAY
-        # ===============================
-        st.markdown("## 🎯 Result")
-
-        colA, colB = st.columns([2, 1])
-
-        with colA:
-            st.markdown(f"""
-            <div style="padding:20px; border-radius:12px; background:#111827;">
-                <h3>Probability of Access</h3>
-                <h1 style="color:{color}; font-size:48px;">
-                    {prob:.1%}
-                </h1>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with colB:
-            st.metric("Model Used", model_name)
-
-        # ===============================
-        # INTERPRETATION
+        # COLOR LOGIC
         # ===============================
         if prob >= 0.75:
-            st.success("🟢 High likelihood of access")
+            color = "green"
+            label = "High likelihood of access"
         elif prob >= 0.50:
-            st.info("🔵 Moderate likelihood of access")
+            color = "orange"
+            label = "Moderate likelihood of access"
         else:
-            st.warning("🟠 Lower likelihood — potential barriers exist")
+            color = "red"
+            label = "Low likelihood of access"
+
+        # ===============================
+        # RESULT DISPLAY
+        # ===============================
+        st.markdown("## 🎯 Prediction Result")
+
+        st.markdown(f"""
+        <div style="
+            padding:25px;
+            border-radius:12px;
+            background:#f9fafb;
+            border:2px solid {color};
+            text-align:center;
+        ">
+            <h3 style="color:#111;">Probability of Access</h3>
+            <h1 style="color:{color}; font-size:52px; margin:10px 0;">
+                {prob:.1%}
+            </h1>
+            <p style="font-size:18px; color:{color};">
+                {label}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.metric("Model Used", model_name)
 
     except Exception as e:
         st.error(f"Error: {e}")
 
 # ===============================
-# COMPARISON SECTION
+# COMPARISON PANEL
 # ===============================
 st.markdown("## 📊 Comparison Panel")
 
