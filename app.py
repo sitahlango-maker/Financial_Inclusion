@@ -16,20 +16,19 @@ st.set_page_config(
 )
 
 st.title("🌍 Digital Financial Inclusion Predictor")
-st.markdown("Mixture of Experts model for predicting access to digital financial services in East Africa.")
+st.markdown("Mixture of Experts model for predicting digital financial access in East Africa.")
 
 # ===============================
-# LOAD MODELS
+# LOAD MODELS (ROOT DIRECTORY SAFE)
 # ===============================
 BASE_DIR = os.path.dirname(__file__)
-MODEL_DIR = os.path.join(BASE_DIR, "models")
 
 @st.cache_resource
 def load_models():
-    model_pooled = joblib.load(os.path.join(MODEL_DIR, "model_pooled.pkl"))
-    gating_model = joblib.load(os.path.join(MODEL_DIR, "gating_model.pkl"))
-    experts = joblib.load(os.path.join(MODEL_DIR, "experts.pkl"))
-    feature_names = joblib.load(os.path.join(MODEL_DIR, "feature_names.pkl"))
+    model_pooled = joblib.load(os.path.join(BASE_DIR, "model_pooled.pkl"))
+    gating_model = joblib.load(os.path.join(BASE_DIR, "gating_model.pkl"))
+    experts = joblib.load(os.path.join(BASE_DIR, "experts.pkl"))
+    feature_names = joblib.load(os.path.join(BASE_DIR, "feature_names.pkl"))
     return model_pooled, gating_model, experts, feature_names
 
 model_pooled, gating_model, experts, feature_names = load_models()
@@ -74,7 +73,7 @@ input_dict = {
 
 input_df = pd.DataFrame([input_dict])
 
-# Align features
+# Align features safely
 for col in feature_names:
     if col not in input_df.columns:
         input_df[col] = 0
@@ -82,21 +81,17 @@ for col in feature_names:
 input_df = input_df[feature_names]
 
 # ===============================
-# PREDICTION BUTTON
+# PREDICTION
 # ===============================
 if st.button("🔮 Predict Digital Financial Access", type="primary"):
 
     with st.spinner("Running Mixture of Experts model..."):
 
-        # -----------------------
-        # Gating Model
-        # -----------------------
+        # Gating model prediction
         pred_country = gating_model.predict(input_df)[0]
         gating_conf = np.max(gating_model.predict_proba(input_df))
 
-        # -----------------------
         # Route to expert or pooled
-        # -----------------------
         if pred_country in experts and gating_conf > 0.4:
             final_model = experts[pred_country]
             model_name = f"Expert Model ({pred_country})"
@@ -129,9 +124,9 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
             st.metric("Model Used", model_name)
             st.metric("Gating Confidence", f"{gating_conf:.1%}")
 
-        # -----------------------
+        # ===============================
         # INTERPRETATION
-        # -----------------------
+        # ===============================
         if prob >= 0.75:
             st.success("🟢 High likelihood of digital financial access")
         elif prob >= 0.50:
@@ -140,7 +135,7 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
             st.warning("🟠 Lower likelihood — potential barriers exist")
 
         # ===============================
-        # COMPARISON
+        # MODEL COMPARISON
         # ===============================
         st.markdown("## 🔍 Model Comparison")
 
@@ -178,7 +173,7 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
             st.pyplot(fig)
 
         except Exception:
-            st.info("Feature importance not available for this model type.")
+            st.info("Feature importance not available for this model.")
 
         # ===============================
         # SHAP EXPLANATION
