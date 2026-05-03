@@ -77,15 +77,15 @@ for col in feature_names:
 input_df = input_df[feature_names]
 
 # ===============================
-# COLOR FUNCTION (IMPROVED CONTRAST)
+# COLOR FUNCTION
 # ===============================
 def color(p):
     if p >= 0.75:
-        return "#16a34a"  # green
+        return "#16a34a"
     elif p >= 0.5:
-        return "#f59e0b"  # amber
+        return "#f59e0b"
     else:
-        return "#dc2626"  # red
+        return "#dc2626"
 
 def box(title, value, color_code):
     st.markdown(f"""
@@ -114,22 +114,25 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
 
             # Expert model
             expert_prob = None
+            expert_label = "No Expert Used"
+
             if pred_country in experts and gating_conf > 0.4:
                 expert_prob = experts[pred_country].predict_proba(input_df)[0, 1]
+                expert_label = f"Expert ({pred_country})"
 
-            # Pooled model
+            # Pooled model (ALWAYS USED FOR COMPARISON)
             pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
 
-            # Final selected model (unchanged logic)
+            # Final decision
             if expert_prob is not None:
                 final_prob = expert_prob
-                model_name = f"Expert Model ({pred_country})"
+                model_name = expert_label
             else:
                 final_prob = pooled_prob
                 model_name = "Pooled Model"
 
             # ===============================
-            # RESULTS
+            # MAIN RESULT
             # ===============================
             st.markdown("## 🎯 Prediction Result")
 
@@ -151,9 +154,9 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
                 st.error("🔴 Low likelihood — barriers exist")
 
             # ===============================
-            # NEW: COMPARISON SECTION (ADDED ONLY)
+            # COMPARISON (POOLED ALWAYS SHOWN)
             # ===============================
-            st.markdown("## 📊 Model Comparison (Diagnostic View)")
+            st.markdown("## 📊 Model Comparison")
 
             c1, c2 = st.columns(2)
 
@@ -164,7 +167,7 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
                 if expert_prob is not None:
                     box(f"Expert Model ({pred_country})", expert_prob, color(expert_prob))
                 else:
-                    st.warning("No expert model available for this country")
+                    st.warning("No expert model used for this prediction")
 
         except Exception as e:
             st.error(f"Prediction error: {e}")
