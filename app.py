@@ -2,157 +2,185 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import requests
-import tempfile
+import os
 
 # ===============================
 # PAGE CONFIG
 # ===============================
-st.set_page_config(page_title="Digital Financial Inclusion Predictor", layout="wide")
-st.title("🌍 Digital Financial Inclusion Predictor")
-st.markdown("Analyze financial access using pooled or country-specific expert models.")
-
-# ===============================
-# LOAD MODELS FROM GITHUB
-# ===============================
-BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
-
-def load_model(file_name):
-    url = BASE_URL + file_name
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        st.error(f"Failed to load {file_name} from GitHub")
-        st.stop()
-
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(response.content)
-        tmp_path = tmp.name
-
-    return joblib.load(tmp_path)
-
-@st.cache_resource
-def load_all():
-    model_pooled = load_model("model_pooled.pkl")
-    gating_model = load_model("gating_model.pkl")
-    experts = load_model("experts.pkl")
-    feature_names = load_model("feature_names.pkl")
-    return model_pooled, gating_model, experts, feature_names
-
-model_pooled, gating_model, experts, feature_names = load_all()
-
-# ===============================
-# SIDEBAR SETTINGS
-# ===============================
-st.sidebar.header("Analysis Mode")
-
-mode = st.sidebar.radio(
-    "Select Model Type",
-    ["Pooled Model Only", "Country Expert Model", "Compare Both"]
+st.set_page_config(
+    page_title="Digital Financial Inclusion Predictor",
+    layout="wide"
 )
 
-st.sidebar.header("Input Features")
+st.title("🌍 Digital Financial Inclusion Predictor")
+st.markdown("Mixture of Experts model for predicting digital financial access in East Africa.")
 
-# Build dynamic input
-input_data = {}
-for f in feature_names:
-    input_data[f] = st.sidebar.number_input(f, value=0.0)
+# ===============================
+# LOAD MODELS
+# ===============================
+BASE_DIR = os.path.dirname(__file__)
 
-input_df = pd.DataFrame([input_data])
-input_df = input_df.reindex(columns=feature_names, fill_value=0)
+@st.cache_resource
+def load_models():
+    model_pooled = joblib.load(os.path.join(BASE_DIR, "model_pooled.pkl"))
+    gating_model = joblib.load(os.path.join(BASE_DIR, "gating_model.pkl"))
+    experts = joblib.load(os.path.join(BASE_DIR, "experts.pkl"))
+    feature_names = joblib.load(os.path.join(BASE_DIR, "feature_names.pkl"))
+    return model_pooled, gating_model, experts, feature_names
+
+model_pooled, gating_model, experts, feature_names = load_models()
+
+# ===============================
+# INPUT SECTION
+# ===============================
+st.subheader("👤 Enter User Profile")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    age = st.slider("Age", 18, 80, 32)
+    gender = st.radio("Gender", ["Male", "Female"], horizontal=True)
+    urbanicity = st.radio("Location", ["Rural", "Urban"], horizontal=True)
+
+with col2:
+    inc_q = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
+    educ = st.selectbox(
+        "Education Level",
+        options=[0, 1, 2, 3, 4],
+        format_func=lambda x: ["No Education", "Primary", "Secondary", "Tertiary", "Higher"][x]
+    )
+    internet_use = st.radio("Uses Internet", ["No", "Yes"], horizontal=True)
+
+with col3:
+    country = st.selectbox("Country", ["KEN (Kenya)", "TZA (Tanzania)", "UGA (Uganda)"])
+    country_code = country.split()[0]
+
+# ===============================
+# PREPARE INPUT
+# ===============================
+input_dict = {
+    "age": age,
+    "female": 1 if gender == "Female" else 0,
+    "urbanicity": 1 if urbanicity == "Urban" else 0,
+    "inc_q": inc_q,
+    "educ": educ,
+    "internet_use": 1 if internet_use == "Yes" else 0,
+    "country_code": country_code
+}
+
+input_df = pd.DataFrame([input_dict])
+
+for col in feature_names:
+    if col not in input_df.columns:
+        input_df[col] = 0
+
+input_df = input_df[feature_names]
+
+# ===============================
+# COLOR FUNCTION (IMPROVED CONTRAST)
+# ===============================
+def get_color(p):
+    if p >= 0.75:
+        return "#22c55e"  # green
+    elif p >= 0.5:
+        return "#f59e0b"  # amber
+    else:
+        return "#ef4444"  # red
 
 # ===============================
 # PREDICTION
 # ===============================
-if st.button("🔮 Run Analysis", use_container_width=True):
+if st.button("🔮 Predict Digital Financial Access", type="primary"):
 
     with st.spinner("Running model..."):
 
-        # --- pooled prediction ---
-        pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
+        try:
+            # Gating model
+            pred_country = gating_model.predict(input_df)[0]
+            gating_conf = np.max(gating_model.predict_proba(input_df))
 
-        # --- gating model ---
-        pred_country = gating_model.predict(input_df)[0]
-        gating_conf = np.max(gating_model.predict_proba(input_df))
+            # Expert selection
+            expert_prob = None
+            expert_model_used = False
 
-        expert_prob = None
-        model_used = "Pooled Model"
+            if pred_country in experts and gating_conf > 0.4:
+                expert_model = experts[pred_country]
+                expert_prob = expert_model.predict_proba(input_df)[0, 1]
+                expert_model_used = True
 
-        # --- expert routing ---
-        if pred_country in experts:
-            expert_model = experts[pred_country]
-            expert_prob = expert_model.predict_proba(input_df)[0, 1]
+            pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
 
-        # ===============================
-        # DISPLAY SECTION
-        # ===============================
-        st.subheader("📊 Results")
+            # ===============================
+            # MAIN RESULT (EXPERT OR POOLED)
+            # ===============================
+            final_prob = expert_prob if expert_model_used else pooled_prob
+            model_name = f"Expert ({pred_country})" if expert_model_used else "Pooled Model"
 
-        def color(prob):
-            if prob >= 0.75:
-                return "green"
-            elif prob >= 0.5:
-                return "orange"
+            st.markdown("## 🎯 Prediction Result")
+
+            st.markdown(
+                f"""
+                <div style="
+                    background-color:#111827;
+                    padding:25px;
+                    border-radius:12px;
+                    text-align:center;">
+                    <h3 style="color:white;">Probability of Digital Financial Access</h3>
+                    <h1 style="color:{get_color(final_prob)}; font-size:52px;">
+                        {final_prob:.1%}
+                    </h1>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            colA, colB = st.columns(2)
+
+            with colA:
+                st.metric("Model Used", model_name)
+
+            with colB:
+                st.metric("Gating Confidence", f"{gating_conf:.1%}")
+
+            # ===============================
+            # INTERPRETATION
+            # ===============================
+            if final_prob >= 0.75:
+                st.success("🟢 High likelihood of financial access")
+            elif final_prob >= 0.50:
+                st.info("🟠 Moderate likelihood of access")
             else:
-                return "red"
+                st.error("🔴 Low likelihood — barriers exist")
 
-        # ===============================
-        # MODE LOGIC
-        # ===============================
-        if mode == "Pooled Model Only":
+            # ===============================
+            # COMPARISON SECTION (ADDED)
+            # ===============================
+            st.markdown("## 📊 Model Comparison")
 
-            st.markdown(f"""
-            <h2 style='color:{color(pooled_prob)}'>
-            Probability: {pooled_prob:.1%}
-            </h2>
-            """, unsafe_allow_html=True)
-
-            st.info("Using pooled model only")
-
-        elif mode == "Country Expert Model":
-
-            if expert_prob is None:
-                st.warning("No expert available for this country. Using pooled model.")
-                expert_prob = pooled_prob
-
-            st.markdown(f"""
-            <h2 style='color:{color(expert_prob)}'>
-            Probability: {expert_prob:.1%}
-            </h2>
-            """, unsafe_allow_html=True)
-
-            st.info(f"Expert selected: {pred_country} | Confidence: {gating_conf:.1%}")
-
-        else:
-            # Compare
             col1, col2 = st.columns(2)
 
             with col1:
-                st.markdown("### 🧠 Pooled Model")
-                st.markdown(f"<h2 style='color:{color(pooled_prob)}'>{pooled_prob:.1%}</h2>", unsafe_allow_html=True)
+                st.markdown("### Pooled Model")
+                st.progress(pooled_prob)
+                st.write(f"**{pooled_prob:.1%}**")
 
             with col2:
-                st.markdown("### 🌍 Expert Model")
+                st.markdown(f"### Expert Model ({pred_country})")
 
-                if expert_prob is None:
-                    st.warning("No expert available")
+                if expert_prob is not None:
+                    st.progress(expert_prob)
+                    st.write(f"**{expert_prob:.1%}**")
                 else:
-                    st.markdown(f"<h2 style='color:{color(expert_prob)}'>{expert_prob:.1%}</h2>", unsafe_allow_html=True)
+                    st.warning("No expert model available")
 
-        # ===============================
-        # INTERPRETATION
-        # ===============================
-        st.markdown("### 📌 Interpretation")
+        except Exception as e:
+            st.error(f"Prediction error: {e}")
 
-        def explain(p):
-            if p >= 0.75:
-                return "🟢 High likelihood of financial access"
-            elif p >= 0.5:
-                return "🟠 Moderate likelihood"
-            else:
-                return "🔴 Low likelihood / barriers exist"
-
-        st.write("Pooled:", explain(pooled_prob))
-
-        if expert_prob is not None:
-            st.write("Expert:", explain(expert_prob))
+# ===============================
+# FOOTER
+# ===============================
+st.markdown("---")
+st.markdown(
+    "<center>Digital Financial Inclusion Predictor • Mixture of Experts</center>",
+    unsafe_allow_html=True
+)
