@@ -15,10 +15,10 @@ st.set_page_config(
 )
 
 st.title("🌍 Digital Financial Inclusion Predictor")
-st.markdown("Mixture of Experts model for predicting digital financial access in East Africa.")
+st.markdown("Mixture of Experts + Pooled Model Comparison")
 
 # ===============================
-# LOAD MODELS FROM GITHUB (SAFE)
+# LOAD MODELS FROM GITHUB
 # ===============================
 BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
 
@@ -49,7 +49,7 @@ model_pooled, gating_model, experts, feature_names = load_all()
 st.success("Models loaded successfully ✅")
 
 # ===============================
-# INPUT SECTION
+# INPUT UI
 # ===============================
 st.subheader("👤 Enter User Profile")
 
@@ -73,7 +73,7 @@ with col3:
     country = st.selectbox("Country", ["KEN", "TZA", "UGA"])
 
 # ===============================
-# INPUT PREP
+# INPUT PREPARATION
 # ===============================
 input_dict = {
     "age": age,
@@ -86,7 +86,6 @@ input_dict = {
 
 input_df = pd.DataFrame([input_dict])
 
-# Align features safely
 for col in feature_names:
     if col not in input_df.columns:
         input_df[col] = 0
@@ -108,10 +107,10 @@ def box(title, value, c):
     st.markdown(f"""
     <div style="
         background-color:#ffffff;
-        padding:20px;
+        padding:18px;
         border-radius:12px;
-        text-align:center;
-        border:1px solid #ddd;">
+        border:1px solid #ddd;
+        text-align:center;">
         <h4>{title}</h4>
         <h1 style="color:{c};">{value:.1%}</h1>
     </div>
@@ -123,36 +122,52 @@ def box(title, value, c):
 if st.button("🔮 Predict", type="primary"):
 
     try:
-        # gating model (country routing)
+        # ===========================
+        # GATING MODEL (country route)
+        # ===========================
         pred_country = gating_model.predict(input_df)[0]
         gating_conf = np.max(gating_model.predict_proba(input_df))
 
-        # expert model
+        # ===========================
+        # EXPERT MODEL
+        # ===========================
         if pred_country in experts and gating_conf > 0.4:
-            prob = experts[pred_country].predict_proba(input_df)[0, 1]
-            model_used = f"Expert ({pred_country})"
+            expert_prob = experts[pred_country].predict_proba(input_df)[0, 1]
+            expert_model_name = f"Expert ({pred_country})"
         else:
-            prob = model_pooled.predict_proba(input_df)[0, 1]
-            model_used = "Pooled Model"
+            expert_prob = model_pooled.predict_proba(input_df)[0, 1]
+            expert_model_name = "Pooled (Fallback)"
 
-        # ===============================
+        # ===========================
+        # POOLED MODEL (ALWAYS RUN)
+        # ===========================
+        pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
+
+        # ===========================
         # RESULTS
-        # ===============================
-        st.markdown("## 🎯 Result")
+        # ===========================
+        st.markdown("## 🎯 Results Comparison")
 
-        colA, colB = st.columns(2)
+        colA, colB, colC = st.columns(3)
 
         with colA:
-            box("Probability of Access", prob, color(prob))
+            box("Expert Model", expert_prob, color(expert_prob))
+            st.caption(expert_model_name)
 
         with colB:
-            st.metric("Model Used", model_used)
-            st.metric("Gating Confidence", f"{gating_conf:.1%}")
+            box("Pooled Model", pooled_prob, color(pooled_prob))
+            st.caption("Global Model")
 
-        # interpretation
-        if prob >= 0.75:
+        with colC:
+            st.metric("Gating Confidence", f"{gating_conf:.1%}")
+            st.metric("Predicted Country", pred_country)
+
+        # ===========================
+        # INTERPRETATION (based on expert)
+        # ===========================
+        if expert_prob >= 0.75:
             st.success("🟢 High likelihood of access")
-        elif prob >= 0.5:
+        elif expert_prob >= 0.5:
             st.info("🟠 Moderate likelihood")
         else:
             st.error("🔴 Low likelihood")
@@ -164,4 +179,4 @@ if st.button("🔮 Predict", type="primary"):
 # FOOTER
 # ===============================
 st.markdown("---")
-st.markdown("Digital Financial Inclusion Predictor • Mixture of Experts")
+st.markdown("Digital Financial Inclusion Predictor • Pooled vs Expert Comparison")
