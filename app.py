@@ -1,155 +1,167 @@
-import numpy as np
+import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+import numpy as np
+import joblib
+import os
+import requests
+import tempfile
 
 # ===============================
-# 1. ALIGN FEATURES SAFELY
+# PAGE CONFIG
 # ===============================
-expected_features = model_pooled.feature_names_in_
+st.set_page_config(
+    page_title="Digital Financial Inclusion Predictor",
+    layout="wide"
+)
 
-X_test_aligned = X_test.copy()
-
-for col in expected_features:
-    if col not in X_test_aligned.columns:
-        X_test_aligned[col] = 0
-
-X_test_aligned = X_test_aligned[expected_features]
+st.title("🌍 Digital Financial Inclusion Predictor")
+st.markdown("Mixture of Experts model for predicting digital financial access in East Africa.")
 
 # ===============================
-# 2. POOLED MODEL
+# LOAD MODELS FROM GITHUB (SAFE)
 # ===============================
-pooled_probs = model_pooled.predict_proba(X_test_aligned)[:, 1]
-pooled_pred = (pooled_probs >= 0.5).astype(int)
+BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
+
+def load_model(file_name):
+    url = BASE_URL + file_name
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        st.error(f"Failed to load {file_name}")
+        st.stop()
+
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(response.content)
+        tmp_path = tmp.name
+
+    return joblib.load(tmp_path)
+
+@st.cache_resource
+def load_all():
+    model_pooled = load_model("model_pooled.pkl")
+    gating_model = load_model("gating_model.pkl")
+    experts = load_model("experts.pkl")
+    feature_names = load_model("feature_names.pkl")
+    return model_pooled, gating_model, experts, feature_names
+
+model_pooled, gating_model, experts, feature_names = load_all()
+
+st.success("Models loaded successfully ✅")
 
 # ===============================
-# 3. EXPERT ROUTING MODEL
+# INPUT SECTION
 # ===============================
-expert_probs = np.zeros(len(X_test_aligned))
-expert_pred = np.zeros(len(X_test_aligned))
+st.subheader("👤 Enter User Profile")
 
-for i in range(len(X_test_aligned)):
-    row = X_test_aligned.iloc[[i]]
+col1, col2, col3 = st.columns(3)
 
-    country = gating_model.predict(row)[0]
+with col1:
+    age = st.slider("Age", 18, 80, 32)
+    gender = st.radio("Gender", ["Male", "Female"], horizontal=True)
+    urbanicity = st.radio("Location", ["Rural", "Urban"], horizontal=True)
 
-    if country in experts:
-        prob = experts[country].predict_proba(row)[0, 1]
+with col2:
+    inc_q = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
+    educ = st.selectbox(
+        "Education Level",
+        [0, 1, 2, 3, 4],
+        format_func=lambda x: ["No Education", "Primary", "Secondary", "Tertiary", "Higher"][x]
+    )
+    internet_use = st.radio("Uses Internet", ["No", "Yes"], horizontal=True)
+
+with col3:
+    country = st.selectbox("Country", ["KEN", "TZA", "UGA"])
+
+# ===============================
+# INPUT PREP
+# ===============================
+input_dict = {
+    "age": age,
+    "female": 1 if gender == "Female" else 0,
+    "urbanicity": 1 if urbanicity == "Urban" else 0,
+    "inc_q": inc_q,
+    "educ": educ,
+    "internet_use": 1 if internet_use == "Yes" else 0
+}
+
+input_df = pd.DataFrame([input_dict])
+
+# Align features safely
+for col in feature_names:
+    if col not in input_df.columns:
+        input_df[col] = 0
+
+input_df = input_df[feature_names]
+
+# ===============================
+# COLOR FUNCTION
+# ===============================
+def color(p):
+    if p >= 0.75:
+        return "#16a34a"
+    elif p >= 0.5:
+        return "#f59e0b"
     else:
-        prob = pooled_probs[i]
+        return "#dc2626"
 
-    expert_probs[i] = prob
-    expert_pred[i] = int(prob >= 0.5)
-
-# ===============================
-# 4. METRICS FUNCTION
-# ===============================
-def cm_metrics(y_true, y_pred, name):
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-
-    return {
-        "Model": name,
-        "TP": tp,
-        "TN": tn,
-        "FP": fp,
-        "FN": fn,
-        "Accuracy": accuracy_score(y_true, y_pred),
-        "Precision": precision_score(y_true, y_pred),
-        "Recall": recall_score(y_true, y_pred),
-        "F1 Score": f1_score(y_true, y_pred)
-    }
+def box(title, value, c):
+    st.markdown(f"""
+    <div style="
+        background-color:#ffffff;
+        padding:20px;
+        border-radius:12px;
+        text-align:center;
+        border:1px solid #ddd;">
+        <h4>{title}</h4>
+        <h1 style="color:{c};">{value:.1%}</h1>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ===============================
-# 5. RESULTS TABLE
+# PREDICTION
 # ===============================
-results = [
-    cm_metrics(y_test, pooled_pred, "Pooled Model"),
-    cm_metrics(y_test, expert_pred, "Expert Routing")
-]
+if st.button("🔮 Predict", type="primary"):
 
-df_cm = pd.DataFrame(results).round(4)
+    try:
+        # gating model (country routing)
+        pred_country = gating_model.predict(input_df)[0]
+        gating_conf = np.max(gating_model.predict_proba(input_df))
 
-print("\n=== CONFUSION MATRIX SUMMARY ===\n")
-print(df_cm.to_string(index=False))
+        # expert model
+        if pred_country in experts and gating_conf > 0.4:
+            prob = experts[pred_country].predict_proba(input_df)[0, 1]
+            model_used = f"Expert ({pred_country})"
+        else:
+            prob = model_pooled.predict_proba(input_df)[0, 1]
+            model_used = "Pooled Model"
 
-# ===============================
-# 6. CONFUSION MATRIX PLOT (POOLED)
-# ===============================
-tn, fp, fn, tp = confusion_matrix(y_test, pooled_pred).ravel()
+        # ===============================
+        # RESULTS
+        # ===============================
+        st.markdown("## 🎯 Result")
 
-cm = np.array([[tn, fp],
-               [fn, tp]])
+        colA, colB = st.columns(2)
 
-fig, ax = plt.subplots(figsize=(5, 4))
+        with colA:
+            box("Probability of Access", prob, color(prob))
 
-# FORCE CLEAN WHITE BACKGROUND
-fig.patch.set_facecolor("white")
-ax.set_facecolor("white")
+        with colB:
+            st.metric("Model Used", model_used)
+            st.metric("Gating Confidence", f"{gating_conf:.1%}")
 
-im = ax.imshow(cm, cmap="Blues")
+        # interpretation
+        if prob >= 0.75:
+            st.success("🟢 High likelihood of access")
+        elif prob >= 0.5:
+            st.info("🟠 Moderate likelihood")
+        else:
+            st.error("🔴 Low likelihood")
 
-ax.set_title("Confusion Matrix - Pooled Model", color="black")
-
-ax.set_xticks([0, 1])
-ax.set_yticks([0, 1])
-ax.set_xticklabels(["No Access", "Access"], color="black")
-ax.set_yticklabels(["No Access", "Access"], color="black")
-
-# annotations
-for i in range(2):
-    for j in range(2):
-        ax.text(
-            j, i, cm[i, j],
-            ha="center",
-            va="center",
-            color="black",
-            fontsize=12
-        )
-
-plt.colorbar(im)
-plt.tight_layout()
-plt.show()
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 # ===============================
-# 7. EXPORT TABLE IMAGE (WHITE BACKGROUND FIXED)
+# FOOTER
 # ===============================
-fig2, ax2 = plt.subplots(figsize=(10, 3))
-
-fig2.patch.set_facecolor("white")
-ax2.set_facecolor("white")
-
-ax2.axis("off")
-
-table = ax2.table(
-    cellText=df_cm.values,
-    colLabels=df_cm.columns,
-    cellLoc="center",
-    loc="center"
-)
-
-table.auto_set_font_size(False)
-table.set_fontsize(10)
-table.scale(1.2, 1.5)
-
-# enforce visibility
-for key, cell in table.get_celld().items():
-    cell.set_edgecolor("black")
-    cell.set_facecolor("white")
-    cell.get_text().set_color("black")
-
-plt.title(
-    "Confusion Matrix Performance Summary",
-    fontsize=14,
-    color="black"
-)
-
-plt.savefig(
-    "confusion_matrix_summary.png",
-    dpi=300,
-    bbox_inches="tight",
-    facecolor="white"
-)
-
-plt.show()
-
-print("Saved: confusion_matrix_summary.png")
+st.markdown("---")
+st.markdown("Digital Financial Inclusion Predictor • Mixture of Experts")
