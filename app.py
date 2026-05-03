@@ -79,13 +79,26 @@ input_df = input_df[feature_names]
 # ===============================
 # COLOR FUNCTION (IMPROVED CONTRAST)
 # ===============================
-def get_color(p):
+def color(p):
     if p >= 0.75:
-        return "#22c55e"  # green
+        return "#16a34a"  # green
     elif p >= 0.5:
         return "#f59e0b"  # amber
     else:
-        return "#ef4444"  # red
+        return "#dc2626"  # red
+
+def box(title, value, color_code):
+    st.markdown(f"""
+        <div style="
+            background-color:#0f172a;
+            padding:20px;
+            border-radius:12px;
+            text-align:center;
+            margin-bottom:10px;">
+            <h4 style="color:#ffffff;">{title}</h4>
+            <h1 style="color:{color_code};">{value:.1%}</h1>
+        </div>
+    """, unsafe_allow_html=True)
 
 # ===============================
 # PREDICTION
@@ -99,79 +112,59 @@ if st.button("🔮 Predict Digital Financial Access", type="primary"):
             pred_country = gating_model.predict(input_df)[0]
             gating_conf = np.max(gating_model.predict_proba(input_df))
 
-            # Expert selection
+            # Expert model
             expert_prob = None
-            expert_model_used = False
-
             if pred_country in experts and gating_conf > 0.4:
-                expert_model = experts[pred_country]
-                expert_prob = expert_model.predict_proba(input_df)[0, 1]
-                expert_model_used = True
+                expert_prob = experts[pred_country].predict_proba(input_df)[0, 1]
 
+            # Pooled model
             pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
 
-            # ===============================
-            # MAIN RESULT (EXPERT OR POOLED)
-            # ===============================
-            final_prob = expert_prob if expert_model_used else pooled_prob
-            model_name = f"Expert ({pred_country})" if expert_model_used else "Pooled Model"
+            # Final selected model (unchanged logic)
+            if expert_prob is not None:
+                final_prob = expert_prob
+                model_name = f"Expert Model ({pred_country})"
+            else:
+                final_prob = pooled_prob
+                model_name = "Pooled Model"
 
+            # ===============================
+            # RESULTS
+            # ===============================
             st.markdown("## 🎯 Prediction Result")
-
-            st.markdown(
-                f"""
-                <div style="
-                    background-color:#111827;
-                    padding:25px;
-                    border-radius:12px;
-                    text-align:center;">
-                    <h3 style="color:white;">Probability of Digital Financial Access</h3>
-                    <h1 style="color:{get_color(final_prob)}; font-size:52px;">
-                        {final_prob:.1%}
-                    </h1>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
 
             colA, colB = st.columns(2)
 
             with colA:
-                st.metric("Model Used", model_name)
+                box("Probability of Access", final_prob, color(final_prob))
 
             with colB:
+                st.metric("Model Used", model_name)
                 st.metric("Gating Confidence", f"{gating_conf:.1%}")
 
-            # ===============================
-            # INTERPRETATION
-            # ===============================
+            # Interpretation
             if final_prob >= 0.75:
-                st.success("🟢 High likelihood of financial access")
+                st.success("🟢 High likelihood of access")
             elif final_prob >= 0.50:
                 st.info("🟠 Moderate likelihood of access")
             else:
                 st.error("🔴 Low likelihood — barriers exist")
 
             # ===============================
-            # COMPARISON SECTION (ADDED)
+            # NEW: COMPARISON SECTION (ADDED ONLY)
             # ===============================
-            st.markdown("## 📊 Model Comparison")
+            st.markdown("## 📊 Model Comparison (Diagnostic View)")
 
-            col1, col2 = st.columns(2)
+            c1, c2 = st.columns(2)
 
-            with col1:
-                st.markdown("### Pooled Model")
-                st.progress(pooled_prob)
-                st.write(f"**{pooled_prob:.1%}**")
+            with c1:
+                box("Pooled Model", pooled_prob, color(pooled_prob))
 
-            with col2:
-                st.markdown(f"### Expert Model ({pred_country})")
-
+            with c2:
                 if expert_prob is not None:
-                    st.progress(expert_prob)
-                    st.write(f"**{expert_prob:.1%}**")
+                    box(f"Expert Model ({pred_country})", expert_prob, color(expert_prob))
                 else:
-                    st.warning("No expert model available")
+                    st.warning("No expert model available for this country")
 
         except Exception as e:
             st.error(f"Prediction error: {e}")
