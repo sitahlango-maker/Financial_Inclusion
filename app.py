@@ -1,122 +1,151 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import joblib
-import requests
-import tempfile
 
-# -------------------------------
+# -----------------------------
 # PAGE CONFIG
-# -------------------------------
-st.set_page_config(page_title="Digital Finance Predictor", layout="wide")
+# -----------------------------
+st.set_page_config(
+    page_title="Digital Finance Access Predictor",
+    page_icon="💜",
+    layout="centered"
+)
+
+# -----------------------------
+# LOAD MODELS
+# -----------------------------
+@st.cache_resource
+def load_models():
+    try:
+        expert_models = {
+            "Kenya": joblib.load("model_kenya.pkl"),
+            # Add more when available
+            # "Nigeria": joblib.load("model_nigeria.pkl"),
+        }
+        pooled_model = joblib.load("model_pooled.pkl")
+        return expert_models, pooled_model
+    except Exception as e:
+        st.error(f"Error loading models: {e}")
+        return None, None
+
+expert_models, pooled_model = load_models()
+
+# -----------------------------
+# TITLE
+# -----------------------------
 st.title("💜 Digital Finance Access Predictor")
 
-# -------------------------------
-# BASE URL (GitHub RAW files)
-# -------------------------------
-BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
-
-# -------------------------------
-# MODEL LOADER (CACHED + ROBUST)
-# -------------------------------
-@st.cache_resource
-def load_model(file_name):
-    url = BASE_URL + file_name
-    
-    try:
-        response = requests.get(url, timeout=30)
-    except Exception as e:
-        st.error(f"Connection error while loading {file_name}: {e}")
-        st.stop()
-
-    if response.status_code != 200:
-        st.error(f"Failed to load {file_name} from GitHub:\n{url}")
-        st.stop()
-
-    try:
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            tmp.write(response.content)
-            tmp_path = tmp.name
-
-        return joblib.load(tmp_path)
-
-    except Exception as e:
-        st.error(f"Error loading {file_name}: {e}")
-        st.stop()
-
-
-# -------------------------------
-# LOAD MODELS
-# -------------------------------
-model_pooled = load_model("model_pooled.pkl")
-gating_model = load_model("gating_model.pkl")
-experts = load_model("experts.pkl")
-feature_names = load_model("feature_names.pkl")
-
-# Validate feature names
-if feature_names is None or len(feature_names) == 0:
-    st.error("Feature names missing — check feature_names.pkl")
+if expert_models is None:
     st.stop()
 
 st.success("✅ Models loaded successfully")
 
-# -------------------------------
-# USER INPUT UI
-# -------------------------------
-st.sidebar.header("Enter User Profile")
+# -----------------------------
+# USER INPUT SECTION
+# -----------------------------
+st.header("🧾 Enter User Profile")
 
-input_data = {}
+# Gender
+gender = st.selectbox("Gender", ["Male", "Female"])
+female = 1 if gender == "Female" else 0
 
-for feature in feature_names:
-    input_data[feature] = st.sidebar.number_input(feature, value=0.0)
+# Age
+age = st.slider("Age", 18, 80, 30)
 
-input_df = pd.DataFrame([input_data])
+# Education
+education = st.selectbox(
+    "Highest Education Level",
+    ["No formal education", "Primary", "Secondary", "Tertiary"]
+)
 
-# -------------------------------
+educ_map = {
+    "No formal education": 0,
+    "Primary": 1,
+    "Secondary": 2,
+    "Tertiary": 3
+}
+educ = educ_map[education]
+
+# Income
+income = st.selectbox(
+    "Income Level",
+    ["Lowest (Q1)", "Low (Q2)", "Middle (Q3)", "High (Q4)", "Highest (Q5)"]
+)
+
+inc_map = {
+    "Lowest (Q1)": 1,
+    "Low (Q2)": 2,
+    "Middle (Q3)": 3,
+    "High (Q4)": 4,
+    "Highest (Q5)": 5
+}
+inc_q = inc_map[income]
+
+# Urban / Rural
+location = st.selectbox("Location", ["Rural", "Urban"])
+urban = 1 if location == "Urban" else 0
+
+# Digital account
+dig_account_ui = st.selectbox("Do you have a digital account?", ["No", "Yes"])
+dig_account = 1 if dig_account_ui == "Yes" else 0
+
+# Digital payments
+dig_payment_ui = st.selectbox("Have you made a digital payment?", ["No", "Yes"])
+anydigpayment = 1 if dig_payment_ui == "Yes" else 0
+
+# -----------------------------
+# MODEL SELECTION
+# -----------------------------
+st.header("🌍 Model Selection")
+
+country = st.selectbox("Select Country", list(expert_models.keys()))
+model_type = st.radio("Model Type", ["Expert", "Pooled"])
+
+# -----------------------------
+# PREPARE INPUT
+# -----------------------------
+input_data = pd.DataFrame([{
+    "female": female,
+    "age": age,
+    "educ": educ,
+    "inc_q": inc_q,
+    "urban": urban,
+    "dig_account": dig_account,
+    "anydigpayment": anydigpayment
+}])
+
+# -----------------------------
 # PREDICTION
-# -------------------------------
-if st.button("🔮 Predict", use_container_width=True):
+# -----------------------------
+if st.button("🔮 Predict Access"):
 
-    with st.spinner("Running Mixture of Experts..."):
+    # Select model
+    if model_type == "Expert":
+        model = expert_models[country]
+        model_used = f"Expert ({country})"
+    else:
+        model = pooled_model
+        model_used = "Pooled Model"
 
-        try:
-            # Gating model
-            pred_country = gating_model.predict(input_df)[0]
-            gating_conf = gating_model.predict_proba(input_df).max(axis=1)[0]
+    try:
+        prob = model.predict_proba(input_data)[0][1]
+        prob_percent = prob * 100
 
-            # Model selection
-            if pred_country in experts and gating_conf >= 0.40:
-                final_model = experts[pred_country]
-                model_used = f"Expert ({pred_country})"
-            else:
-                final_model = model_pooled
-                model_used = "Pooled Model"
+        # -----------------------------
+        # OUTPUT
+        # -----------------------------
+        st.subheader("🎯 Prediction Result")
 
-            # Final prediction
-            prob = final_model.predict_proba(input_df)[0, 1]
+        st.metric("Probability of Access", f"{prob_percent:.2f}%")
+        st.write(f"**Model Used:** {model_used}")
 
-            # -------------------------------
-            # DISPLAY RESULTS
-            # -------------------------------
-            st.subheader("🎯 Prediction Result")
+        # Risk classification
+        if prob_percent < 30:
+            st.error("🔴 Very Low Access Likelihood")
+        elif prob_percent < 60:
+            st.warning("🟠 Moderate Access Gap")
+        else:
+            st.success("🟢 High Access Likelihood")
 
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.metric("Probability of Access", f"{prob:.2%}")
-
-            with col2:
-                st.metric("Model Used", model_used)
-                st.metric("Gating Confidence", f"{gating_conf:.2%}")
-
-            # Interpretation
-            if prob >= 0.75:
-                st.success("🟢 High Chance of Financial Access")
-            elif prob >= 0.5:
-                st.info("🔵 Moderate Chance of Financial Access")
-            else:
-                st.warning("🟠 Low Chance of Financial Access")
-
-        except Exception as e:
-            st.error(f"Prediction error: {e}")
+    except Exception as e:
+        st.error(f"Prediction error: {e}")
