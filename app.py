@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import plotly.graph_objects as go
 
 # ====================== PAGE CONFIG ======================
 st.set_page_config(
@@ -11,13 +10,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# ====================== CLEAN SWIFT EXECUTIVE UI ======================
+# ====================== CLEAN UI ======================
 st.markdown("""
 <style>
 
 .stApp {
     background: linear-gradient(135deg, #F5F8FC 0%, #EEF3F9 50%, #E9EEF6 100%);
-    color: #1F2A44;
 }
 
 .main .block-container {
@@ -27,37 +25,14 @@ st.markdown("""
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
 
-h1, h2, h3 {
-    color: #1F4B7A;
-}
-
-/* WHITE INPUTS (CRITICAL FOR VISIBILITY) */
+/* WHITE INPUT FIELDS */
 input, select, textarea {
     background-color: white !important;
     color: #1F2A44 !important;
 }
 
-/* STREAMLIT INPUT FIX */
-.stTextInput input,
-.stNumberInput input,
-.stSelectbox div,
-.stSlider {
+.stSelectbox div, .stNumberInput input, .stTextInput input {
     background-color: white !important;
-    color: #1F2A44 !important;
-}
-
-/* BUTTON */
-.stButton>button {
-    background: linear-gradient(90deg, #14B8A6, #0EA5A4);
-    color: white;
-    font-weight: 600;
-    border-radius: 10px;
-}
-
-div[data-testid="metric-container"] {
-    background: white;
-    border-radius: 12px;
-    padding: 12px;
 }
 
 </style>
@@ -82,6 +57,9 @@ def load_models():
 
 models = load_models()
 
+# ====================== GET TRUE FEATURE LIST ======================
+FEATURES = list(models["pooled"].feature_names_in_)
+
 # ====================== USER INPUT ======================
 st.subheader("👤 User Profile")
 
@@ -93,23 +71,27 @@ with col1:
     urban = st.radio("Location", ["Rural", "Urban"])
 
 with col2:
-    inc_q = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
-    educ = st.selectbox("Education", [0,1,2,3,4])
+    inc_q = st.selectbox("Income Quintile", [1,2,3,4,5])
+
+    # ✅ EDUCATION FIX (READABLE LABELS)
+    educ = st.selectbox(
+        "Education Level",
+        [0,1,2,3,4],
+        format_func=lambda x: {
+            0: "No Education",
+            1: "Primary",
+            2: "Secondary",
+            3: "Tertiary",
+            4: "Higher"
+        }[x]
+    )
+
     internet = st.radio("Internet Use", ["No","Yes"])
 
 with col3:
     country = st.selectbox("Country", ["KEN","TZA","UGA"])
 
-# ====================== MODEL FEATURES (EXACT MATCH) ======================
-FEATURES = [
-    "female","age","educ","inc_q","urbanicity",
-    "dig_account","anydigpayment","internet_use","wgt",
-    "reg_index","reg_cons_prot","reg_kyc_prop",
-    "reg_entry_lim","reg_max_lim","reg_agent_el",
-    "num_providers","earliest_launch"
-]
-
-# ====================== INPUT ENGINEERING ======================
+# ====================== BASE INPUT ======================
 row = {
     "female": 1 if female == "Female" else 0,
     "age": age,
@@ -119,25 +101,22 @@ row = {
     "internet_use": 1 if internet == "Yes" else 0,
     "dig_account": 0,
     "anydigpayment": 0,
-    "wgt": 1.0,
-
-    # fixed country-level proxies (IMPORTANT: no country_code, no mmpi)
-    "reg_index": 0.75 if country == "KEN" else 0.7,
-    "reg_cons_prot": 0.7,
-    "reg_kyc_prop": 1,
-    "reg_entry_lim": 1,
-    "reg_max_lim": 1,
-    "reg_agent_el": 1,
-    "num_providers": 4,
-    "earliest_launch": 2012
+    "wgt": 1.0
 }
 
-df = pd.DataFrame([row])[FEATURES]
+df = pd.DataFrame([row])
 
-# ====================== MODEL LOGIC ======================
-def predict_models(df):
+# ====================== ALIGN TO TRAINING SCHEMA ======================
+for col in FEATURES:
+    if col not in df.columns:
+        df[col] = 0
 
-    pooled = models["pooled"].predict_proba(df)[0, 1]
+df = df[FEATURES]
+
+# ====================== MODEL PREDICTION ======================
+def predict(df):
+
+    pooled = models["pooled"].predict_proba(df)[0,1]
 
     country_pred = models["gating"].predict(df)[0]
 
@@ -145,19 +124,19 @@ def predict_models(df):
 
     if country_pred in models["experts"]:
         try:
-            expert = models["experts"][country_pred].predict_proba(df)[0, 1]
+            expert = models["experts"][country_pred].predict_proba(df)[0,1]
         except:
             pass
 
     return pooled, expert
 
-# ====================== RUN PREDICTION ======================
+# ====================== RUN APP ======================
 if st.button("🔮 Predict Digital Inclusion"):
 
     if models:
 
         try:
-            pooled, expert = predict_models(df)
+            pooled, expert = predict(df)
 
             col1, col2, col3 = st.columns(3)
 
@@ -174,7 +153,7 @@ if st.button("🔮 Predict Digital Inclusion"):
             st.markdown("### 🧭 Interpretation")
 
             if abs(delta) < 0.05:
-                st.info("Models agree on prediction.")
+                st.info("Models are aligned.")
             elif delta > 0:
                 st.success("Expert model is more optimistic.")
             else:
