@@ -99,12 +99,12 @@ def load_models():
         model_dir = "trained_models"
 
         models = {
-            "pooled": joblib.load(f"{model_dir}/model_pooled.joblib"),
-            "experts": joblib.load(f"{model_dir}/experts.joblib"),
-            "gating": joblib.load(f"{model_dir}/gating_model.joblib"),
-            "feature_names": joblib.load(f"{model_dir}/feature_names.joblib"),
-            "medians": joblib.load(f"{model_dir}/medians.joblib")
-        }
+    "pooled": joblib.load("model_pooled.joblib"),
+    "experts": joblib.load("experts.joblib"),
+    "gating": joblib.load("gating_model.joblib"),
+    "feature_names": joblib.load("feature_names.joblib"),
+    "medians": joblib.load("medians.joblib")
+}
 
         st.success("✅ Models loaded successfully")
         return models
