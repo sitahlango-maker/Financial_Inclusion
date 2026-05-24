@@ -7,46 +7,51 @@ import tempfile
 import matplotlib.pyplot as plt
 
 # ===============================
-# PAGE CONFIG
+# CONFIG
 # ===============================
-st.set_page_config(
-    page_title="Digital Financial Inclusion Predictor",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Digital Financial Inclusion Predictor", layout="wide")
 st.title("🌍 Digital Financial Inclusion Predictor")
-st.markdown("Mixture of Experts vs Pooled Model with Feature Insights")
+st.markdown("Mixture of Experts vs Pooled Model (Aligned Version)")
 
 # ===============================
 # LOAD MODELS
 # ===============================
 BASE_URL = "https://raw.githubusercontent.com/sitahlango-maker/Financial_Inclusion/main/"
 
-def load_model(file_name):
-    url = BASE_URL + file_name
-    response = requests.get(url)
+def load_model(file):
+    url = BASE_URL + file
+    r = requests.get(url)
 
-    if response.status_code != 200:
-        st.error(f"Failed to load {file_name}")
+    if r.status_code != 200:
+        st.error(f"Failed to load {file}")
         st.stop()
 
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(response.content)
-        tmp_path = tmp.name
-
-    return joblib.load(tmp_path)
+        tmp.write(r.content)
+        return joblib.load(tmp.name)
 
 @st.cache_resource
 def load_all():
-    model_pooled = load_model("model_pooled.pkl")
-    gating_model = load_model("gating_model.pkl")
-    experts = load_model("experts.pkl")
-    feature_names = load_model("feature_names.pkl")
-    return model_pooled, gating_model, experts, feature_names
+    return (
+        load_model("model_pooled.pkl"),
+        load_model("gating_model.pkl"),
+        load_model("experts.pkl")
+    )
 
-model_pooled, gating_model, experts, feature_names = load_all()
+model_pooled, gating_model, experts = load_all()
 
 st.success("Models loaded successfully ✅")
+
+# ===============================
+# FIXED FEATURE SET (CRITICAL)
+# ===============================
+feature_names = [
+    'female', 'age', 'educ', 'inc_q', 'urbanicity',
+    'dig_account', 'anydigpayment', 'internet_use',
+    'wgt', 'reg_index', 'reg_cons_prot', 'reg_kyc_prop',
+    'reg_entry_lim', 'reg_max_lim', 'reg_agent_el',
+    'num_providers', 'earliest_launch'
+]
 
 # ===============================
 # INPUT UI
@@ -56,150 +61,120 @@ st.subheader("👤 Enter User Profile")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    age = st.slider("Age", 18, 80, 32)
+    age = st.slider("Age", 18, 80, 30)
     gender = st.radio("Gender", ["Male", "Female"])
-    urbanicity = st.radio("Location", ["Rural", "Urban"])
+    urban = st.radio("Location", ["Rural", "Urban"])
 
 with col2:
-    inc_q = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
-    educ = st.selectbox(
-        "Education Level",
-        [0, 1, 2, 3, 4],
-        format_func=lambda x: ["No Education", "Primary", "Secondary", "Tertiary", "Higher"][x]
-    )
-    internet_use = st.radio("Uses Internet", ["No", "Yes"])
+    inc_q = st.selectbox("Income Quintile", [1,2,3,4,5])
+    educ = st.selectbox("Education Level", [0,1,2,3,4],
+        format_func=lambda x: ["No Education","Primary","Secondary","Tertiary","Higher"][x])
+    internet = st.radio("Uses Internet", ["No","Yes"])
 
 with col3:
-    country = st.selectbox("Country", ["KEN", "TZA", "UGA"])
+    country = st.selectbox("Country", ["KEN","TZA","UGA"])
 
 # ===============================
-# INPUT PREPROCESSING
+# INPUT BUILDING (MATCH TRAINING)
 # ===============================
 input_dict = {
-    "age": age,
     "female": 1 if gender == "Female" else 0,
-    "urbanicity": 1 if urbanicity == "Urban" else 0,
-    "inc_q": inc_q,
+    "age": age,
     "educ": educ,
-    "internet_use": 1 if internet_use == "Yes" else 0
+    "inc_q": inc_q,
+    "urbanicity": 1 if urban == "Urban" else 0,
+    "dig_account": 0,
+    "anydigpayment": 0,
+    "internet_use": 1 if internet == "Yes" else 0,
+    "wgt": 1,
+    "reg_index": 0,
+    "reg_cons_prot": 0,
+    "reg_kyc_prop": 0,
+    "reg_entry_lim": 0,
+    "reg_max_lim": 0,
+    "reg_agent_el": 0,
+    "num_providers": 0,
+    "earliest_launch": 0
 }
 
 input_df = pd.DataFrame([input_dict])
 
-# FORCE FEATURE ALIGNMENT (CRITICAL FIX)
-input_df = input_df.reindex(columns=feature_names, fill_value=0)
+# enforce correct order
+input_df = input_df[feature_names]
 
 # ===============================
 # HELPERS
 # ===============================
 def color(p):
-    if p >= 0.75:
+    if p > 0.75:
         return "#16a34a"
-    elif p >= 0.5:
+    elif p > 0.5:
         return "#f59e0b"
-    else:
-        return "#dc2626"
+    return "#dc2626"
 
 def box(title, value, c):
     st.markdown(f"""
-    <div style="
-        background-color:#ffffff;
-        padding:18px;
-        border-radius:12px;
-        border:1px solid #ddd;
-        text-align:center;">
-        <h4>{title}</h4>
-        <h1 style="color:{c};">{value:.1%}</h1>
+    <div style="padding:15px;border-radius:10px;border:1px solid #ddd;text-align:center">
+    <h4>{title}</h4>
+    <h1 style="color:{c}">{value:.1%}</h1>
     </div>
     """, unsafe_allow_html=True)
 
 # ===============================
-# FEATURE IMPORTANCE PLOT
+# FEATURE IMPORTANCE
 # ===============================
-def plot_feature_importance(model, title):
-    importances = model.feature_importances_
+def plot_importance(model, title):
+    imp = model.feature_importances_
+
     df = pd.DataFrame({
         "feature": feature_names,
-        "importance": importances
-    }).sort_values(by="importance", ascending=False).head(10)
+        "importance": imp
+    }).sort_values("importance", ascending=True).tail(10)
 
     fig, ax = plt.subplots()
-    ax.barh(df["feature"][::-1], df["importance"][::-1])
+    ax.barh(df["feature"], df["importance"])
     ax.set_title(title)
     st.pyplot(fig)
 
 # ===============================
 # PREDICTION
 # ===============================
-if st.button("🔮 Predict", type="primary"):
+if st.button("🔮 Predict"):
 
-    try:
-        # ---------------------------
-        # GATING MODEL
-        # ---------------------------
-        pred_country = gating_model.predict(input_df)[0]
-        gating_conf = np.max(gating_model.predict_proba(input_df))
+    # gating
+    pred_country = gating_model.predict(input_df)[0]
+    conf = np.max(gating_model.predict_proba(input_df))
 
-        # ---------------------------
-        # EXPERT OR POOLED
-        # ---------------------------
-        if pred_country in experts and gating_conf > 0.4:
-            expert_model = experts[pred_country]
-            expert_prob = expert_model.predict_proba(input_df)[0, 1]
-            expert_name = f"Expert ({pred_country})"
-        else:
-            expert_prob = model_pooled.predict_proba(input_df)[0, 1]
-            expert_model = model_pooled
-            expert_name = "Pooled Model"
+    # expert or pooled
+    if pred_country in experts and conf > 0.4:
+        model = experts[pred_country]
+        label = f"Expert ({pred_country})"
+    else:
+        model = model_pooled
+        label = "Pooled Model"
 
-        # pooled always
-        pooled_prob = model_pooled.predict_proba(input_df)[0, 1]
+    prob = model.predict_proba(input_df)[0,1]
+    pooled_prob = model_pooled.predict_proba(input_df)[0,1]
 
-        # ===========================
-        # RESULTS
-        # ===========================
-        st.markdown("## 🎯 Results Comparison")
+    st.markdown("## Results")
 
-        colA, colB, colC = st.columns(3)
+    col1, col2, col3 = st.columns(3)
 
-        with colA:
-            box("Selected Model", expert_prob, color(expert_prob))
-            st.caption(expert_name)
+    with col1:
+        box("Selected Model", prob, color(prob))
+        st.caption(label)
 
-        with colB:
-            box("Pooled Model", pooled_prob, color(pooled_prob))
-            st.caption("Global Benchmark")
+    with col2:
+        box("Pooled Model", pooled_prob, color(pooled_prob))
 
-        with colC:
-            st.metric("Gating Confidence", f"{gating_conf:.1%}")
-            st.metric("Predicted Country", pred_country)
+    with col3:
+        st.metric("Gating Confidence", f"{conf:.1%}")
+        st.metric("Predicted Country", pred_country)
 
-        # ===========================
-        # INTERPRETATION
-        # ===========================
-        if expert_prob >= 0.75:
-            st.success("🟢 High likelihood of financial inclusion")
-        elif expert_prob >= 0.5:
-            st.info("🟠 Moderate likelihood")
-        else:
-            st.error("🔴 Low likelihood")
+    st.markdown("---")
+    st.subheader("📊 Feature Importance")
 
-        # ===========================
-        # FEATURE IMPORTANCE SECTION
-        # ===========================
-        st.markdown("---")
-        st.subheader("📊 Feature Importance (Model Explanation)")
+    plot_importance(model_pooled, "Pooled Model Importance")
 
-        plot_feature_importance(model_pooled, "Pooled Model Feature Importance")
-
-        if pred_country in experts:
-            plot_feature_importance(experts[pred_country], f"{pred_country} Expert Feature Importance")
-
-    except Exception as e:
-        st.error(f"Error: {e}")
-
-# ===============================
-# FOOTER
-# ===============================
-st.markdown("---")
-st.markdown("Digital Financial Inclusion Predictor • MoE + Explainability Layer")
+    if pred_country in experts:
+        plot_importance(experts[pred_country], f"{pred_country} Expert Importance")
