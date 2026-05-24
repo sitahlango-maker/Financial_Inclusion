@@ -12,76 +12,78 @@ st.set_page_config(
     layout="wide"
 )
 
-# Theme
+# ====================== LIGHT SWIFT EXECUTIVE THEME ======================
 st.markdown("""
 <style>
 
-/* ===== BACKGROUND (INSTITUTIONAL FINANCE STYLE) ===== */
+/* ===================== LIGHT BACKGROUND ===================== */
 .stApp {
-    background: linear-gradient(135deg, #0B1F3A 0%, #102A43 50%, #0F172A 100%);
-    color: #E5E7EB;
+    background: linear-gradient(135deg, #F5F8FC 0%, #EEF3F9 50%, #E9EEF6 100%);
+    color: #1F2A44;
 }
 
-/* ===== MAIN GLASS CONTAINER ===== */
+/* ===================== MAIN CONTAINER ===================== */
 .main .block-container {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(31, 42, 68, 0.08);
     border-radius: 18px;
     padding: 2.5rem;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
 }
 
-/* ===== HEADINGS ===== */
+/* ===================== HEADINGS ===================== */
 h1 {
-    color: #E6F1FF;
+    color: #0F2D4A;
     font-weight: 700;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
 
 h2, h3 {
-    color: #A7C7E7;
+    color: #1F4B7A;
     font-weight: 600;
 }
 
-/* ===== TEXT ===== */
+/* ===================== TEXT ===================== */
 p, label, .stMarkdown {
-    color: #D1D5DB !important;
+    color: #2F3B52 !important;
 }
 
-/* ===== BUTTONS (TEAL FINANCE ACCENT) ===== */
+/* ===================== BUTTONS ===================== */
 .stButton>button {
-    background: linear-gradient(90deg, #0EA5A4, #14B8A6);
-    color: #0B1F3A;
+    background: linear-gradient(90deg, #14B8A6, #0EA5A4);
+    color: white;
     font-weight: 600;
     border-radius: 10px;
     border: none;
     padding: 0.6rem 1.2rem;
+    box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
 }
 
 .stButton>button:hover {
-    background: linear-gradient(90deg, #14B8A6, #2DD4BF);
+    background: linear-gradient(90deg, #0EA5A4, #2DD4BF);
     transform: translateY(-1px);
 }
 
-/* ===== METRICS CARDS ===== */
+/* ===================== METRIC CARDS ===================== */
 div[data-testid="metric-container"] {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 12px;
-    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(15, 45, 74, 0.08);
+    padding: 14px;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
-/* ===== INPUT FIELDS ===== */
+/* ===================== INPUT ELEMENTS ===================== */
 .stSelectbox, .stRadio, .stSlider {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.9);
     border-radius: 10px;
 }
 
-/* ===== STATUS COLORS ===== */
-.stSuccess { color: #34D399 !important; }
-.stWarning { color: #FBBF24 !important; }
-.stError { color: #F87171 !important; }
+/* ===================== STATUS COLORS ===================== */
+.stSuccess { color: #16A34A !important; }
+.stWarning { color: #D97706 !important; }
+.stError { color: #DC2626 !important; }
 
 </style>
 """, unsafe_allow_html=True)
@@ -93,9 +95,9 @@ st.markdown("### East Africa • Kenya | Tanzania | Uganda")
 # ====================== LOAD MODELS ======================
 @st.cache_resource
 def load_models():
-    model_dir = "trained_models"
-
     try:
+        model_dir = "trained_models"
+
         models = {
             "pooled": joblib.load(f"{model_dir}/model_pooled.joblib"),
             "experts": joblib.load(f"{model_dir}/experts.joblib"),
@@ -123,12 +125,10 @@ def get_feature_importance(model, feature_names):
     else:
         return None
 
-    df = pd.DataFrame({
+    return pd.DataFrame({
         "feature": feature_names,
         "importance": imp
     }).sort_values("importance", ascending=False)
-
-    return df
 
 
 def plot_feature_importance(model):
@@ -151,14 +151,14 @@ def plot_feature_importance(model):
 
     fig.update_layout(
         title="Key Drivers of Digital Financial Access",
-        template="plotly_white",
         height=450,
+        template="plotly_white",
         margin=dict(l=120, r=30, t=50, b=30)
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-# ====================== INPUT UI ======================
+# ====================== INPUT FORM ======================
 st.subheader("👤 User Profile")
 
 col1, col2, col3 = st.columns(3)
@@ -170,8 +170,11 @@ with col1:
 
 with col2:
     inc_q = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
-    educ = st.selectbox("Education Level", [0, 1, 2, 3, 4],
-                        format_func=lambda x: ["None", "Primary", "Secondary", "Tertiary", "Higher"][x])
+    educ = st.selectbox(
+        "Education Level",
+        [0, 1, 2, 3, 4],
+        format_func=lambda x: ["None", "Primary", "Secondary", "Tertiary", "Higher"][x]
+    )
     internet_use = st.radio("Internet Use", ["No", "Yes"], horizontal=True)
 
 with col3:
@@ -204,7 +207,7 @@ input_df = pd.DataFrame([input_dict])
 if models:
     input_df = input_df.reindex(columns=models["feature_names"], fill_value=0)
 
-# ====================== GATING PREDICTION ======================
+# ====================== GATING MODEL ======================
 def predict_with_gating(X_input):
     X_input = X_input.reindex(columns=models["feature_names"], fill_value=0)
 
@@ -218,8 +221,10 @@ def predict_with_gating(X_input):
         if country in models["experts"]:
             try:
                 expert = models["experts"][country]
+
                 if hasattr(expert, "feature_names_in_"):
                     sample = sample.reindex(columns=expert.feature_names_in_, fill_value=0)
+
                 prob = expert.predict_proba(sample)[0, 1]
             except:
                 prob = models["pooled"].predict_proba(sample)[0, 1]
@@ -231,7 +236,7 @@ def predict_with_gating(X_input):
     return np.array(results)
 
 # ====================== PREDICTION ======================
-if st.button("🔮 Predict", type="primary"):
+if st.button("🔮 Predict Digital Inclusion", type="primary"):
 
     if models:
 
@@ -244,8 +249,10 @@ if st.button("🔮 Predict", type="primary"):
                 st.metric("Digital Account Probability", f"{prob*100:.1f}%")
 
             with col2:
-                st.metric("Risk Category",
-                          "High" if prob > 0.75 else "Medium" if prob > 0.5 else "Low")
+                st.metric(
+                    "Risk Level",
+                    "High" if prob > 0.75 else "Medium" if prob > 0.5 else "Low"
+                )
 
             if prob > 0.75:
                 st.success("High likelihood of digital financial inclusion")
