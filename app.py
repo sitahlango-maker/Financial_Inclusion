@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# ====================== LIGHT SWIFT EXECUTIVE THEME ======================
+# ====================== LIGHT EXECUTIVE THEME ======================
 st.markdown("""
 <style>
 
@@ -151,9 +151,11 @@ with col1:
 
 with col2:
     inc_q = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
-    educ = st.selectbox("Education Level",
-                        [0, 1, 2, 3, 4],
-                        format_func=lambda x: ["None", "Primary", "Secondary", "Tertiary", "Higher"][x])
+    educ = st.selectbox(
+        "Education Level",
+        [0, 1, 2, 3, 4],
+        format_func=lambda x: ["None", "Primary", "Secondary", "Tertiary", "Higher"][x]
+    )
     internet_use = st.radio("Internet Use", ["No", "Yes"], horizontal=True)
 
 with col3:
@@ -186,62 +188,76 @@ input_df = pd.DataFrame([input_dict])
 if models:
     input_df = input_df.reindex(columns=models["feature_names"], fill_value=0)
 
-# ====================== PREDICTION ======================
-def predict_with_gating(X_input):
+# ====================== MODEL COMPARISON ======================
+def predict_models(X_input):
 
     X_input = X_input.reindex(columns=models["feature_names"], fill_value=0)
 
-    pred_country = models["gating"].predict(X_input)
+    # Pooled model
+    pooled_prob = models["pooled"].predict_proba(X_input)[0, 1]
 
-    results = []
+    # Gating model
+    pred_country = models["gating"].predict(X_input)[0]
 
-    for i, country in enumerate(pred_country):
-        sample = X_input.iloc[[i]]
+    expert_prob = pooled_prob
+    model_used = "Pooled"
 
-        if country in models["experts"]:
-            try:
-                expert = models["experts"][country]
+    if pred_country in models["experts"]:
+        try:
+            expert = models["experts"][pred_country]
 
-                if hasattr(expert, "feature_names_in_"):
-                    sample = sample.reindex(columns=expert.feature_names_in_, fill_value=0)
+            sample = X_input.copy()
 
-                prob = expert.predict_proba(sample)[0, 1]
-            except:
-                prob = models["pooled"].predict_proba(sample)[0, 1]
-        else:
-            prob = models["pooled"].predict_proba(sample)[0, 1]
+            if hasattr(expert, "feature_names_in_"):
+                sample = sample.reindex(columns=expert.feature_names_in_, fill_value=0)
 
-        results.append(prob)
+            expert_prob = expert.predict_proba(sample)[0, 1]
+            model_used = f"Expert ({pred_country})"
 
-    return np.array(results)
+        except:
+            expert_prob = pooled_prob
+            model_used = "Pooled (fallback)"
 
-# ====================== PREDICTION UI ======================
+    return pooled_prob, expert_prob, model_used
+
+# ====================== PREDICTION ======================
 if st.button("🔮 Predict Digital Inclusion", type="primary"):
 
     if models:
 
         try:
-            prob = predict_with_gating(input_df)[0]
+            pooled_prob, expert_prob, model_used = predict_models(input_df)
 
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
 
             with col1:
-                st.metric("Digital Account Probability", f"{prob*100:.1f}%")
+                st.metric("🌐 Pooled Model", f"{pooled_prob*100:.1f}%")
 
             with col2:
-                st.metric(
-                    "Risk Level",
-                    "High" if prob > 0.75 else "Medium" if prob > 0.5 else "Low"
-                )
+                st.metric("🧠 Expert Model", f"{expert_prob*100:.1f}%")
 
-            if prob > 0.75:
-                st.success("High likelihood of digital financial inclusion")
-            elif prob > 0.5:
-                st.warning("Moderate likelihood")
+            with col3:
+                delta = expert_prob - pooled_prob
+                st.metric("📊 Difference", f"{delta*100:+.1f}%")
+
+            st.markdown("### 🧭 Interpretation")
+
+            if abs(delta) < 0.05:
+                st.info("Models are aligned.")
+            elif delta > 0:
+                st.success("Expert model is more optimistic.")
             else:
-                st.error("Low likelihood")
+                st.warning("Expert model is more conservative.")
 
-            # ================= FEATURE DRIVERS =================
+            final_prob = expert_prob
+
+            if final_prob > 0.75:
+                st.success("🟢 High likelihood of digital inclusion")
+            elif final_prob > 0.5:
+                st.warning("🟡 Moderate likelihood")
+            else:
+                st.error("🔴 Low likelihood")
+
             st.markdown("### 📊 Key Drivers")
             plot_feature_importance(models["pooled"])
 
