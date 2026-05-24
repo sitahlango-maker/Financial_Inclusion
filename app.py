@@ -118,23 +118,31 @@ models = load_models()
 
 # ====================== FEATURE IMPORTANCE ======================
 def get_feature_importance(model, feature_names):
+
     if hasattr(model, "feature_importances_"):
-        imp = model.feature_importances_
+        imp = np.array(model.feature_importances_)
+
     elif hasattr(model, "coef_"):
-        imp = np.abs(model.coef_[0])
+        imp = np.abs(np.array(model.coef_).flatten())
     else:
         return None
 
-    return pd.DataFrame({
-        "feature": feature_names,
-        "importance": imp
+    # 🔒 SAFETY: align lengths to avoid crash
+    n = min(len(feature_names), len(imp))
+
+    fi = pd.DataFrame({
+        "feature": feature_names[:n],
+        "importance": imp[:n]
     }).sort_values("importance", ascending=False)
+
+    return fi
 
 
 def plot_feature_importance(model):
-    fi = get_feature_importance(model, models["feature_names"])
 
-    if fi is None:
+fi = get_feature_importance(model, model.feature_names_in_)
+
+    if fi is None or fi.empty:
         st.info("Feature importance not available.")
         return
 
@@ -146,7 +154,10 @@ def plot_feature_importance(model):
         x=fi["importance"],
         y=fi["feature"],
         orientation="h",
-        marker=dict(color=fi["importance"], colorscale="Teal")
+        marker=dict(
+            color=fi["importance"],
+            colorscale="Teal"
+        )
     ))
 
     fig.update_layout(
