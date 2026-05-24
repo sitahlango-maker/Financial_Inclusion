@@ -3,12 +3,11 @@ import pandas as pd
 import numpy as np
 import joblib
 import plotly.graph_objects as go
-import plotly.express as px
 
 # ====================== PAGE CONFIG ======================
 st.set_page_config(
     page_title="Digital Finance Access Predictor",
-    page_icon="💳",
+    page_icon="🌍💸",
     layout="wide"
 )
 
@@ -16,13 +15,11 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* ===================== LIGHT BACKGROUND ===================== */
 .stApp {
     background: linear-gradient(135deg, #F5F8FC 0%, #EEF3F9 50%, #E9EEF6 100%);
     color: #1F2A44;
 }
 
-/* ===================== MAIN CONTAINER ===================== */
 .main .block-container {
     background: rgba(255, 255, 255, 0.75);
     border: 1px solid rgba(31, 42, 68, 0.08);
@@ -32,11 +29,9 @@ st.markdown("""
     backdrop-filter: blur(10px);
 }
 
-/* ===================== HEADINGS ===================== */
 h1 {
     color: #0F2D4A;
     font-weight: 700;
-    letter-spacing: 0.3px;
 }
 
 h2, h3 {
@@ -44,20 +39,17 @@ h2, h3 {
     font-weight: 600;
 }
 
-/* ===================== TEXT ===================== */
-p, label, .stMarkdown {
+p, label {
     color: #2F3B52 !important;
 }
 
-/* ===================== BUTTONS ===================== */
 .stButton>button {
     background: linear-gradient(90deg, #14B8A6, #0EA5A4);
     color: white;
     font-weight: 600;
     border-radius: 10px;
-    border: none;
     padding: 0.6rem 1.2rem;
-    box-shadow: 0 4px 12px rgba(20, 184, 166, 0.25);
+    border: none;
 }
 
 .stButton>button:hover {
@@ -65,7 +57,6 @@ p, label, .stMarkdown {
     transform: translateY(-1px);
 }
 
-/* ===================== METRIC CARDS ===================== */
 div[data-testid="metric-container"] {
     background-color: rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(15, 45, 74, 0.08);
@@ -74,37 +65,24 @@ div[data-testid="metric-container"] {
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
-/* ===================== INPUT ELEMENTS ===================== */
-.stSelectbox, .stRadio, .stSlider {
-    background-color: rgba(255, 255, 255, 0.9);
-    border-radius: 10px;
-}
-
-/* ===================== STATUS COLORS ===================== */
-.stSuccess { color: #16A34A !important; }
-.stWarning { color: #D97706 !important; }
-.stError { color: #DC2626 !important; }
-
 </style>
 """, unsafe_allow_html=True)
 
 # ====================== TITLE ======================
-st.title("💳 Digital Finance Access Predictor")
+st.title("🌍💸 Digital Finance Access Predictor")
 st.markdown("### East Africa • Kenya | Tanzania | Uganda")
 
 # ====================== LOAD MODELS ======================
 @st.cache_resource
 def load_models():
     try:
-        model_dir = "trained_models"
-
         models = {
-    "pooled": joblib.load("model_pooled.joblib"),
-    "experts": joblib.load("experts.joblib"),
-    "gating": joblib.load("gating_model.joblib"),
-    "feature_names": joblib.load("feature_names.joblib"),
-    "medians": joblib.load("medians.joblib")
-}
+            "pooled": joblib.load("model_pooled.joblib"),
+            "experts": joblib.load("experts.joblib"),
+            "gating": joblib.load("gating_model.joblib"),
+            "feature_names": joblib.load("feature_names.joblib"),
+            "medians": joblib.load("medians.joblib")
+        }
 
         st.success("✅ Models loaded successfully")
         return models
@@ -113,7 +91,6 @@ def load_models():
         st.error(f"Model loading error: {e}")
         return None
 
-
 models = load_models()
 
 # ====================== FEATURE IMPORTANCE ======================
@@ -121,26 +98,22 @@ def get_feature_importance(model, feature_names):
 
     if hasattr(model, "feature_importances_"):
         imp = np.array(model.feature_importances_)
-
     elif hasattr(model, "coef_"):
         imp = np.abs(np.array(model.coef_).flatten())
     else:
         return None
 
-    # 🔒 SAFETY: align lengths to avoid crash
     n = min(len(feature_names), len(imp))
 
-    fi = pd.DataFrame({
+    return pd.DataFrame({
         "feature": feature_names[:n],
         "importance": imp[:n]
     }).sort_values("importance", ascending=False)
 
-    return fi
-
 
 def plot_feature_importance(model):
 
-fi = get_feature_importance(model, model.feature_names_in_)
+    fi = get_feature_importance(model, models["feature_names"])
 
     if fi is None or fi.empty:
         st.info("Feature importance not available.")
@@ -154,10 +127,7 @@ fi = get_feature_importance(model, model.feature_names_in_)
         x=fi["importance"],
         y=fi["feature"],
         orientation="h",
-        marker=dict(
-            color=fi["importance"],
-            colorscale="Teal"
-        )
+        marker=dict(color=fi["importance"], colorscale="Teal")
     ))
 
     fig.update_layout(
@@ -181,11 +151,9 @@ with col1:
 
 with col2:
     inc_q = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
-    educ = st.selectbox(
-        "Education Level",
-        [0, 1, 2, 3, 4],
-        format_func=lambda x: ["None", "Primary", "Secondary", "Tertiary", "Higher"][x]
-    )
+    educ = st.selectbox("Education Level",
+                        [0, 1, 2, 3, 4],
+                        format_func=lambda x: ["None", "Primary", "Secondary", "Tertiary", "Higher"][x])
     internet_use = st.radio("Internet Use", ["No", "Yes"], horizontal=True)
 
 with col3:
@@ -218,8 +186,9 @@ input_df = pd.DataFrame([input_dict])
 if models:
     input_df = input_df.reindex(columns=models["feature_names"], fill_value=0)
 
-# ====================== GATING MODEL ======================
+# ====================== PREDICTION ======================
 def predict_with_gating(X_input):
+
     X_input = X_input.reindex(columns=models["feature_names"], fill_value=0)
 
     pred_country = models["gating"].predict(X_input)
@@ -246,7 +215,7 @@ def predict_with_gating(X_input):
 
     return np.array(results)
 
-# ====================== PREDICTION ======================
+# ====================== PREDICTION UI ======================
 if st.button("🔮 Predict Digital Inclusion", type="primary"):
 
     if models:
