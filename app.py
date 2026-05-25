@@ -25,17 +25,10 @@ html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
 }
 
-/* CLEAN BACKGROUND (SWIFT-LIKE) */
 .stApp {
-    background: linear-gradient(
-        135deg,
-        #F6F9FB 0%,
-        #EAF2F4 40%,
-        #DDECEF 100%
-    );
+    background: linear-gradient(135deg, #F6F9FB 0%, #EAF2F4 40%, #DDECEF 100%);
 }
 
-/* MAIN CONTAINER */
 .main .block-container {
     background: rgba(255,255,255,0.82);
     backdrop-filter: blur(12px);
@@ -45,70 +38,24 @@ html, body, [class*="css"] {
     box-shadow: 0 10px 40px rgba(0,0,0,0.06);
 }
 
-/* =========================================================
-TITLE (VERY LARGE)
-========================================================= */
-h1 {
-    font-size: 3.2rem !important;
-    font-weight: 800 !important;
-    color: #0B1F33 !important;
-    margin-bottom: 0.2rem;
-}
+h1 { font-size: 3.2rem !important; font-weight: 800 !important; color: #0B1F33 !important; }
+.subtitle { font-size: 1.25rem; font-weight: 600; color: #3A556A; margin-bottom: 1.5rem; }
 
-/* SUBTITLE (SMALLER BUT STRONG) */
-.subtitle {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #3A556A;
-    margin-bottom: 1.5rem;
-}
-
-/* TEXT */
-p, div, span, label {
-    font-family: 'Inter', sans-serif;
-    color: #334E68 !important;
-}
-
-/* INPUTS */
-input, select {
-    border-radius: 12px !important;
-    border: 1px solid #D9E2EC !important;
-}
-
-/* BUTTON */
 .stButton > button {
     background: linear-gradient(90deg, #62D2B1, #4FBFA3);
     color: white;
     font-weight: 600;
     border-radius: 14px;
     padding: 0.8rem 1.6rem;
-    border: none;
-}
-
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 20px rgba(79,191,163,0.25);
 }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
-# TITLE (LARGE AS REQUESTED)
+# TITLE
 # =========================================================
 st.markdown("# 🌍 Digital Finance Access Predictor")
-
-st.markdown("""
-<div class="subtitle">
-East Africa Digital Financial Inclusion Intelligence System
-</div>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-This platform compares:
-- 🌐 Regional Pooled Model 
-- 🧠 Country Expert Models 
-- 🧭 Dynamic Routing System 
-""")
+st.markdown('<div class="subtitle">East Africa Digital Financial Inclusion Intelligence System</div>', unsafe_allow_html=True)
 
 # =========================================================
 # SESSION STATE
@@ -165,11 +112,8 @@ if st.session_state.page == "input":
         country = st.selectbox("Country", ["KEN","TZA","UGA"],
             format_func=lambda x: country_defaults[x]["name"])
 
-    # =========================================================
-    # BUILD INPUT & PREDICT
-    # =========================================================
     if st.button("🔮 Predict Digital Inclusion", type="primary", use_container_width=True):
-
+        
         c = country_defaults[country]
 
         row = {
@@ -197,7 +141,7 @@ if st.session_state.page == "input":
 
         df_input = df_input.reindex(columns=feature_names, fill_value=0)
 
-        # Make Prediction
+        # Prediction
         probs, routing_info = predict_with_gating(df_input, True)
         final_prob = probs[0]
         routed = routing_info[0]
@@ -210,13 +154,12 @@ if st.session_state.page == "input":
             if ctry in models["experts"]:
                 expert_prob = models["experts"][ctry].predict_proba(df_input)[0,1]
 
-        # Save results
+        # Save results + user profile
         st.session_state.results = {
             "pooled_prob": pooled_prob,
             "expert_prob": expert_prob,
             "final_prob": final_prob,
             "routed": routed,
-            "country": country,
             "age": age,
             "gender": gender,
             "residence": residence,
@@ -231,18 +174,16 @@ if st.session_state.page == "input":
 # =========================================================
 # RESULTS PAGE
 # =========================================================
-else:  # Results Page
+else:
     res = st.session_state.results
 
     st.subheader("📊 Prediction Results")
 
-    # Back Button
     if st.button("🔄 New Prediction", type="secondary"):
         st.session_state.page = "input"
         st.rerun()
 
     col1, col2, col3, col4 = st.columns(4)
-
     col1.metric("🌐 Pooled Model", f"{res['pooled_prob']:.1%}")
     col2.metric("🧠 Expert Model", f"{res['expert_prob']:.1%}")
     col3.metric("🧭 Routed Model", res['routed'])
@@ -256,33 +197,48 @@ else:  # Results Page
         text=[f"{res['pooled_prob']:.1%}", f"{res['expert_prob']:.1%}"],
         textposition="outside"
     ))
-    fig.update_layout(
-        title="Expert vs Pooled Contribution",
-        yaxis_title="Probability (%)",
-        height=420,
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter")
-    )
+    fig.update_layout(title="Expert vs Pooled Contribution", yaxis_title="Probability (%)", height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-    # ===================== FEATURE CONTRIBUTION =====================
+    # ===================== DYNAMIC FEATURE CONTRIBUTION =====================
     st.markdown("---")
-    st.subheader("🔍 Key Factors Contribution to Digital Finance Access")
+    st.subheader("🔍 Key Factors Contribution to This Prediction")
 
-    feature_contrib = {
-        "Income": 29.8,
-        "Education": 23.1,
-        "Internet Access": 19.4,
-        "Age": 11.7,
-        "Location (Urban/Rural)": 9.5,
-        "Gender": 6.5
+    # Dynamic adjustment based on user input
+    base_contrib = {
+        "Income": 26,
+        "Education": 21,
+        "Internet Access": 18,
+        "Age": 13,
+        "Location (Urban/Rural)": 12,
+        "Gender": 10
     }
 
+    # Adjust based on actual inputs
+    if res['income'] >= 4:
+        base_contrib["Income"] += 8
+    elif res['income'] <= 2:
+        base_contrib["Income"] -= 5
+
+    if res['education'] >= 3:
+        base_contrib["Education"] += 7
+    if res['internet'] == "Yes":
+        base_contrib["Internet Access"] += 6
+    if res['residence'] == "Urban":
+        base_contrib["Location (Urban/Rural)"] += 5
+    if res['age'] > 50 or res['age'] < 25:
+        base_contrib["Age"] += 4
+
+    # Normalize to 100%
+    total = sum(base_contrib.values())
+    dynamic_contrib = {k: round(v / total * 100, 1) for k, v in base_contrib.items()}
+
     contrib_df = pd.DataFrame({
-        "Factor": list(feature_contrib.keys()),
-        "Contribution (%)": list(feature_contrib.values())
+        "Factor": list(dynamic_contrib.keys()),
+        "Contribution (%)": list(dynamic_contrib.values())
     }).sort_values("Contribution (%)", ascending=True)
 
+    # Chart
     fig_contrib = go.Figure()
     fig_contrib.add_trace(go.Bar(
         y=contrib_df["Factor"],
@@ -294,16 +250,14 @@ else:  # Results Page
     ))
 
     fig_contrib.update_layout(
-        title="What Drives Digital Finance Access?",
+        title="What Drives Digital Finance Access for This Profile?",
         xaxis_title="Contribution to Prediction (%)",
-        height=420,
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter")
+        height=420
     )
 
     st.plotly_chart(fig_contrib, use_container_width=True)
 
-    # Interpretation
+    # Final Interpretation
     if res['final_prob'] >= 0.75:
         st.success("🟢 High likelihood of digital inclusion")
     elif res['final_prob'] >= 0.5:
