@@ -5,3 +5,5 @@ joblib
 scikit-learn
 plotly
 xgboost
+matplotlib
+seaborn
