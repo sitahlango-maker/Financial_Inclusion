@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import plotly.graph_objects as go
 from routing import predict_with_gating
 
 # =========================================================
@@ -14,7 +15,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# MODERN FINTECH UI
+# MODERN UI
 # =========================================================
 st.markdown("""
 <style>
@@ -56,7 +57,7 @@ MAIN CONTAINER
 
 .main .block-container {
 
-    background: rgba(255,255,255,0.78);
+    background: rgba(255,255,255,0.80);
 
     backdrop-filter: blur(14px);
 
@@ -78,7 +79,7 @@ h1 {
 
     color: #102A43 !important;
 
-    font-size: 2.5rem !important;
+    font-size: 2.6rem !important;
 
     font-weight: 700 !important;
 }
@@ -113,7 +114,7 @@ label {
 }
 
 /* =====================================================
-SELECT BOX
+SELECTBOX
 ===================================================== */
 
 .stSelectbox > div > div {
@@ -145,7 +146,7 @@ input {
 }
 
 /* =====================================================
-RADIO BUTTONS
+RADIOS
 ===================================================== */
 
 .stRadio {
@@ -163,7 +164,7 @@ METRICS
 
 [data-testid="metric-container"] {
 
-    background: rgba(255,255,255,0.90);
+    background: rgba(255,255,255,0.92);
 
     border-radius: 20px;
 
@@ -231,15 +232,16 @@ st.title("🌍 Digital Finance Access Predictor")
 st.markdown("""
 ### East Africa Digital Financial Inclusion Intelligence System
 
-This platform predicts the likelihood of digital financial inclusion using:
+This platform predicts digital financial inclusion using:
 
-- 🌐 Regional Pooled Intelligence
+- 🌐 Regional Pooled Model
 - 🧠 Country Expert Models
-- 🧭 Dynamic Routing Architecture
+- 🧭 Mixture-of-Experts Routing Architecture
+- 📊 Dynamic Expert vs Pooled Comparison
 """)
 
 # =========================================================
-# LOAD MODELS
+# LOAD METADATA
 # =========================================================
 @st.cache_resource
 def load_metadata():
@@ -252,6 +254,14 @@ def load_metadata():
 
         "medians": joblib.load(
             "medians.joblib"
+        ),
+
+        "pooled_model": joblib.load(
+            "model_pooled.joblib"
+        ),
+
+        "experts": joblib.load(
+            "experts.joblib"
         )
     }
 
@@ -424,6 +434,9 @@ if st.button("🔮 Predict Digital Inclusion"):
 
     try:
 
+        # =================================================
+        # ROUTED PREDICTION
+        # =================================================
         probs, routing_info = predict_with_gating(
             df_input,
             return_routing_info=True
@@ -434,62 +447,175 @@ if st.button("🔮 Predict Digital Inclusion"):
         routed_model = routing_info[0]
 
         # =================================================
-        # RESULTS
+        # POOLED MODEL
+        # =================================================
+        pooled_prob = models[
+            "pooled_model"
+        ].predict_proba(df_input)[0,1]
+
+        # =================================================
+        # EXPERT MODEL
+        # =================================================
+        expert_prob = pooled_prob
+
+        if routed_model.startswith("Expert"):
+
+            expert_country = routed_model.replace(
+                "Expert_",
+                ""
+            )
+
+            if expert_country in models["experts"]:
+
+                expert_model = models[
+                    "experts"
+                ][expert_country]
+
+                expert_prob = expert_model.predict_proba(
+                    df_input
+                )[0,1]
+
+        # =================================================
+        # RESULTS HEADER
         # =================================================
         st.markdown("---")
 
-        st.subheader("📊 Prediction Results")
+        st.subheader(
+            "📊 Prediction Results"
+        )
 
-        m1, m2, m3 = st.columns(3)
+        # =================================================
+        # METRICS
+        # =================================================
+        m1, m2, m3, m4 = st.columns(4)
 
         with m1:
 
             st.metric(
-                "🌐 Final Probability",
-                f"{final_prob:.1%}"
+                "🌐 Pooled Model",
+                f"{pooled_prob:.1%}"
             )
 
         with m2:
+
+            st.metric(
+                "🧠 Expert Model",
+                f"{expert_prob:.1%}"
+            )
+
+        with m3:
 
             st.metric(
                 "🧭 Routed To",
                 routed_model
             )
 
-        with m3:
-
-            if final_prob >= 0.75:
-
-                category = "High"
-
-            elif final_prob >= 0.50:
-
-                category = "Moderate"
-
-            else:
-
-                category = "Low"
+        with m4:
 
             st.metric(
-                "📌 Inclusion Level",
-                category
+                "🎯 Final Prediction",
+                f"{final_prob:.1%}"
             )
 
         # =================================================
-        # PROGRESS BAR
+        # MODEL COMPARISON
         # =================================================
-        st.progress(float(final_prob))
+        st.markdown("---")
+
+        st.subheader(
+            "⚖️ Expert vs Pooled Model Contribution"
+        )
+
+        contribution_df = pd.DataFrame({
+
+            "Model": [
+                "Pooled Model",
+                "Expert Model"
+            ],
+
+            "Probability": [
+                pooled_prob * 100,
+                expert_prob * 100
+            ]
+        })
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Bar(
+
+            x=contribution_df["Model"],
+
+            y=contribution_df["Probability"],
+
+            text=[
+                f"{pooled_prob:.1%}",
+                f"{expert_prob:.1%}"
+            ],
+
+            textposition='outside'
+        ))
+
+        fig.update_layout(
+
+            height=420,
+
+            title="Comparison of Regional vs Country-Specific Intelligence",
+
+            yaxis_title="Predicted Probability (%)",
+
+            xaxis_title="Model Type",
+
+            plot_bgcolor='rgba(0,0,0,0)',
+
+            paper_bgcolor='rgba(0,0,0,0)',
+
+            font=dict(
+                family="Inter",
+                size=14
+            )
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
         # =================================================
-        # INTERPRETATION
+        # MODEL INTERPRETATION
         # =================================================
-        st.markdown("### 🧭 Personalized Inclusion Drivers")
+        difference = expert_prob - pooled_prob
+
+        if abs(difference) < 0.05:
+
+            st.info(
+                "🟰 The expert and pooled models are closely aligned for this profile."
+            )
+
+        elif difference > 0:
+
+            st.success(
+                "📈 The country-specific expert model predicts stronger inclusion likelihood than the regional pooled model."
+            )
+
+        else:
+
+            st.warning(
+                "📉 The country-specific expert model predicts lower inclusion likelihood than the pooled regional model."
+            )
+
+        # =================================================
+        # PERSONALIZED DRIVERS
+        # =================================================
+        st.markdown("---")
+
+        st.subheader(
+            "🧭 Personalized Inclusion Drivers"
+        )
 
         positive_factors = []
 
         risk_factors = []
 
-        # POSITIVE FACTORS
         if education >= 3:
 
             positive_factors.append(
@@ -508,35 +634,34 @@ if st.button("🔮 Predict Digital Inclusion"):
                 "✅ Middle-to-high income improves financial accessibility"
             )
 
-        if country == "KEN":
-
-            positive_factors.append(
-                "✅ Kenya's mature mobile money ecosystem supports inclusion"
-            )
-
         if internet == "Yes":
 
             positive_factors.append(
-                "✅ Internet access significantly supports digital finance usage"
+                "✅ Internet access supports digital financial adoption"
             )
 
-        # RISK FACTORS
+        if country == "KEN":
+
+            positive_factors.append(
+                "✅ Kenya's mature mobile money ecosystem strengthens inclusion probability"
+            )
+
         if internet == "No":
 
             risk_factors.append(
-                "⚠ Lack of internet access may reduce digital service adoption"
+                "⚠ Lack of internet access may reduce digital service usage"
             )
 
         if residence == "Rural":
 
             risk_factors.append(
-                "⚠ Rural residence may reduce proximity to digital financial services"
+                "⚠ Rural residence may limit proximity to financial agents and infrastructure"
             )
 
         if income <= 2:
 
             risk_factors.append(
-                "⚠ Lower income levels may limit access to financial technologies"
+                "⚠ Lower income levels may reduce access to financial technologies"
             )
 
         if education <= 1:
@@ -545,17 +670,21 @@ if st.button("🔮 Predict Digital Inclusion"):
                 "⚠ Lower education levels may reduce digital financial literacy"
             )
 
-        # DISPLAY POSITIVE FACTORS
         if positive_factors:
 
-            st.success("\n\n".join(positive_factors))
+            st.success(
+                "\n\n".join(positive_factors)
+            )
 
-        # DISPLAY RISK FACTORS
         if risk_factors:
 
-            st.warning("\n\n".join(risk_factors))
+            st.warning(
+                "\n\n".join(risk_factors)
+            )
 
+        # =================================================
         # FINAL SUMMARY
+        # =================================================
         st.markdown("---")
 
         if final_prob >= 0.75:
