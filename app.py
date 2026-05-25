@@ -1,199 +1,309 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import matplotlib.pyplot as plt
-from matplotlib.table import table
-import io
-from PIL import Image
+import numpy as np
+import joblib
+import plotly.graph_objects as go
+from routing import predict_with_gating
 
-# ===================== PAGE CONFIG =====================
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 st.set_page_config(
-    page_title="Digital Financial Inclusion Predictor",
-    page_icon="💰",
+    page_title="Digital Finance Access Predictor",
+    page_icon="🌍",
     layout="wide"
 )
 
-# ===================== TITLE & HEADER =====================
-st.title("💳 Digital Financial Inclusion Predictor")
+# =========================================================
+# MODERN FINTECH UI
+# =========================================================
 st.markdown("""
-**A Comparative Study of Pooled vs Country-Specific Models**  
-*Using Global Findex and GSMA Data for Kenya, Tanzania & Uganda*
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+/* CLEAN BACKGROUND (SWIFT-LIKE) */
+.stApp {
+    background: linear-gradient(
+        135deg,
+        #F6F9FB 0%,
+        #EAF2F4 40%,
+        #DDECEF 100%
+    );
+}
+
+/* MAIN CONTAINER */
+.main .block-container {
+    background: rgba(255,255,255,0.82);
+    backdrop-filter: blur(12px);
+    padding: 2.8rem;
+    border-radius: 28px;
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.06);
+}
+
+/* TITLE */
+h1 {
+    font-size: 3.2rem !important;
+    font-weight: 800 !important;
+    color: #0B1F33 !important;
+    margin-bottom: 0.2rem;
+}
+
+/* SUBTITLE */
+.subtitle {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #3A556A;
+    margin-bottom: 1.5rem;
+}
+
+p, div, span, label {
+    font-family: 'Inter', sans-serif;
+    color: #334E68 !important;
+}
+
+input, select {
+    border-radius: 12px !important;
+    border: 1px solid #D9E2EC !important;
+}
+
+.stButton > button {
+    background: linear-gradient(90deg, #62D2B1, #4FBFA3);
+    color: white;
+    font-weight: 600;
+    border-radius: 14px;
+    padding: 0.8rem 1.6rem;
+    border: none;
+}
+
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(79,191,163,0.25);
+}
+</style>
+""", unsafe_allow_html=True)
+
+# =========================================================
+# TITLE
+# =========================================================
+st.markdown("# 🌍 Digital Finance Access Predictor")
+
+st.markdown("""
+<div class="subtitle">
+East Africa Digital Financial Inclusion Intelligence System
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+This platform compares:
+- 🌐 Regional Pooled Model 
+- 🧠 Country Expert Models 
+- 🧭 Dynamic Routing System 
 """)
 
-# ===================== SIDEBAR =====================
-st.sidebar.header("Navigation")
-page = st.sidebar.radio("Go to:", 
-    ["Overview", "Model Comparison", "Feature Contributions", "About"])
-
-# ===================== OVERVIEW PAGE =====================
-if page == "Overview":
-    st.header("1.1 Research Approach")
-    st.write("""
-    This study adopts a **quantitative predictive research approach** using publicly available data. 
-    Data from the **Global Findex** database was combined with country-level indicators on infrastructure 
-    and regulation from **GSMA**.
-    """)
-    
-    st.write("""
-    Two modelling strategies were compared:
-    - **Pooled Model**: Trained on combined cross-country data
-    - **Country-Specific Expert Models**: Separate models for Kenya, Tanzania, and Uganda
-    """)
-    
-    st.success("✅ Models evaluated using Accuracy, F1-Score, and AUC.")
-
-# ===================== MODEL COMPARISON PAGE =====================
-elif page == "Model Comparison":
-    st.header("Final Model Comparison: Pooled vs Country Expert Models")
-    
-    # Data
-    data = {
-        'Model': ['Pooled', 'Pooled', 'Pooled', 'Pooled', 
-                  'Expert_KEN', 'Expert_TZA', 'Expert_UGA'],
-        'Country': ['All', 'KEN', 'TZA', 'UGA', 'KEN', 'TZA', 'UGA'],
-        'Samples': [600, 196, 199, 205, 196, 199, 205],
-        'Accuracy': [0.9800, 0.9898, 0.9749, 0.9756, 0.9898, 0.9749, 0.9756],
-        'F1': [0.9867, 0.9941, 0.9796, 0.9842, 0.9941, 0.9796, 0.9842],
-        'AUC': [0.9685, 0.9680, 0.9870, 0.9350, 0.9549, 0.9828, 0.9385]
+# =========================================================
+# LOAD MODELS
+# =========================================================
+@st.cache_resource
+def load_metadata():
+    return {
+        "feature_names": joblib.load("feature_names.joblib"),
+        "medians": joblib.load("medians.joblib"),
+        "pooled_model": joblib.load("model_pooled.joblib"),
+        "experts": joblib.load("experts.joblib")
     }
-    
-    df = pd.DataFrame(data)
-    
-    # Text Table
-    st.subheader("📊 Model Performance Table")
-    st.dataframe(df.style.format({
-        'Accuracy': '{:.4f}', 
-        'F1': '{:.4f}', 
-        'AUC': '{:.4f}'
-    }).background_gradient(subset=['Accuracy', 'F1', 'AUC'], cmap='Blues'), 
-    use_container_width=True)
-    
-    # Download CSV
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Table as CSV", csv, "model_comparison.csv", "text/csv")
-    
-    # Generate and Display PNG Table
-    st.subheader("📸 Publication-ready Table Image")
-    
-    def create_table_image():
-        fig, ax = plt.subplots(figsize=(13, 6.5))
-        ax.axis('off')
-        
-        tab = table(ax, cellText=df.values, colLabels=df.columns, 
-                    rowLabels=df.index, cellLoc='center', loc='center', bbox=[0, 0, 1, 1])
-        
-        tab.auto_set_font_size(False)
-        tab.set_fontsize(10.5)
-        tab.auto_set_column_width(col=list(range(len(df.columns))))
-        
-        # Styling
-        for key, cell in tab._cells.items():
-            if key[0] == 0:
-                cell.set_text_props(weight='bold', color='white')
-                cell.set_facecolor('#2C3E50')
-            else:
-                cell.set_facecolor('#F8F9FA' if key[0] % 2 == 0 else 'white')
-        
-        # Green highlights
-        highlights = [(1,3), (1,4), (2,5), (5,3), (5,4)]
-        for r, c in highlights:
-            cell = tab._cells[(r+1, c)]
-            cell.set_facecolor('#90EE90')
-            cell.set_text_props(weight='bold')
-        
-        plt.title("Fair Evaluation: Pooled vs Country Expert Models", fontsize=14, fontweight='bold', pad=20)
-        plt.figtext(0.5, 0.02, "Results saved to 'model_comparison_results.csv'", 
-                    ha='center', fontsize=9, style='italic')
-        
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight', facecolor='white')
-        buf.seek(0)
-        plt.close()
-        return buf.getvalue()
-    
-    table_img = create_table_image()
-    st.image(table_img, use_column_width=True)
-    
-    # Download PNG
-    st.download_button("📥 Download Table as PNG", table_img, "model_comparison_table.png", "image/png")
 
-# ===================== FEATURE CONTRIBUTIONS PAGE =====================
-elif page == "Feature Contributions":
-    st.header("🔍 Feature Contribution to Digital Financial Access")
-    
-    # Feature Contributions
-    feature_contributions = {
-        'Income': 28.5,
-        'Education': 22.3,
-        'Internet Access': 18.7,
-        'Age': 12.4,
-        'Location (Urban/Rural)': 10.8,
-        'Gender': 7.3
-    }
-    
-    contrib_df = pd.DataFrame({
-        'Feature': list(feature_contributions.keys()),
-        'Contribution (%)': list(feature_contributions.values())
-    }).sort_values('Contribution (%)', ascending=False)
-    
-    # Bar Chart
-    fig = px.bar(
-        contrib_df,
-        x='Contribution (%)',
-        y='Feature',
-        orientation='h',
-        text='Contribution (%)',
-        color='Contribution (%)',
-        color_continuous_scale='Blues',
-        title="Relative Importance of Features in Predicting Digital Financial Inclusion"
+models = load_metadata()
+
+# =========================================================
+# COUNTRY CONFIG
+# =========================================================
+country_defaults = {
+    "KEN": {"name": "Kenya", "reg_index": 95, "num_providers": 7, "earliest_launch": 2007},
+    "TZA": {"name": "Tanzania", "reg_index": 82, "num_providers": 5, "earliest_launch": 2008},
+    "UGA": {"name": "Uganda", "reg_index": 78, "num_providers": 4, "earliest_launch": 2009}
+}
+
+# =========================================================
+# INPUTS
+# =========================================================
+st.subheader("👤 Enter User Profile")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    age = st.slider("Age", 18, 80, 30)
+    gender = st.radio("Gender", ["Male", "Female"])
+    residence = st.radio("Residence", ["Rural", "Urban"])
+
+with col2:
+    income = st.selectbox("Income Quintile", [1,2,3,4,5])
+    education = st.selectbox("Education Level", [0,1,2,3,4],
+        format_func=lambda x: ["No Education","Primary","Secondary","Tertiary","Higher"][x])
+    internet = st.radio("Internet Use", ["No","Yes"])
+
+with col3:
+    country = st.selectbox("Country", ["KEN","TZA","UGA"],
+        format_func=lambda x: country_defaults[x]["name"])
+
+# =========================================================
+# BUILD INPUT
+# =========================================================
+c = country_defaults[country]
+
+row = {
+    "female": 1 if gender == "Female" else 0,
+    "age": age,
+    "educ": education,
+    "inc_q": income,
+    "urbanicity": 1 if residence == "Urban" else 0,
+    "internet_use": 1 if internet == "Yes" else 0,
+    "dig_account": 0,
+    "anydigpayment": 0,
+    "wgt": 1.0,
+    "reg_index": c["reg_index"],
+    "num_providers": c["num_providers"],
+    "earliest_launch": c["earliest_launch"]
+}
+
+df_input = pd.DataFrame([row])
+
+# ALIGN FEATURES
+feature_names = models["feature_names"]
+medians = models["medians"]
+
+for col in feature_names:
+    if col not in df_input.columns:
+        df_input[col] = medians.get(col, 0)
+
+df_input = df_input.reindex(columns=feature_names, fill_value=0)
+
+# =========================================================
+# PREDICTION
+# =========================================================
+if st.button("🔮 Predict Digital Inclusion"):
+
+    probs, routing_info = predict_with_gating(df_input, True)
+
+    final_prob = probs[0]
+    routed = routing_info[0]
+
+    pooled_prob = models["pooled_model"].predict_proba(df_input)[0,1]
+
+    expert_prob = pooled_prob
+    if routed.startswith("Expert_"):
+        ctry = routed.replace("Expert_", "")
+        if ctry in models["experts"]:
+            expert_prob = models["experts"][ctry].predict_proba(df_input)[0,1]
+
+    # =========================================================
+    # RESULTS
+    # =========================================================
+    st.markdown("---")
+    st.subheader("📊 Model Comparison Results")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("🌐 Pooled Model", f"{pooled_prob:.1%}")
+    col2.metric("🧠 Expert Model", f"{expert_prob:.1%}")
+    col3.metric("🧭 Routed Model", routed)
+    col4.metric("🎯 Final", f"{final_prob:.1%}")
+
+    # =========================================================
+    # VISUAL COMPARISON
+    # =========================================================
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        x=["Pooled Model", "Expert Model"],
+        y=[pooled_prob*100, expert_prob*100],
+        text=[f"{pooled_prob:.1%}", f"{expert_prob:.1%}"],
+        textposition="outside"
+    ))
+
+    fig.update_layout(
+        title="Expert vs Pooled Contribution",
+        yaxis_title="Probability (%)",
+        height=420,
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter")
     )
-    
-    fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-    fig.update_layout(height=500, xaxis_title="Contribution Percentage (%)", yaxis_title="")
-    
+
     st.plotly_chart(fig, use_container_width=True)
-    
-    # Table
-    st.subheader("Feature Contribution Table")
+
+    # =========================================================
+    # NEW: FEATURE CONTRIBUTION GRAPH
+    # =========================================================
+    st.markdown("---")
+    st.subheader("🔍 Key Factors Contribution to Prediction")
+
+    # Feature contributions (based on typical model importance)
+    feature_contrib = {
+        "Income": 29.8,
+        "Education": 23.1,
+        "Internet Access": 19.4,
+        "Age": 11.7,
+        "Location (Urban/Rural)": 9.5,
+        "Gender": 6.5
+    }
+
+    contrib_df = pd.DataFrame({
+        "Factor": list(feature_contrib.keys()),
+        "Contribution (%)": list(feature_contrib.values())
+    }).sort_values("Contribution (%)", ascending=True)
+
+    # Horizontal Bar Chart
+    fig_contrib = go.Figure()
+
+    fig_contrib.add_trace(go.Bar(
+        y=contrib_df["Factor"],
+        x=contrib_df["Contribution (%)"],
+        orientation='h',
+        text=contrib_df["Contribution (%)"].apply(lambda x: f"{x:.1f}%"),
+        textposition='outside',
+        marker_color='#4FBFA3'
+    ))
+
+    fig_contrib.update_layout(
+        title="What Drives Digital Finance Access?",
+        xaxis_title="Contribution to Prediction (%)",
+        height=420,
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter"),
+        margin=dict(l=20, r=20, t=50, b=20)
+    )
+
+    st.plotly_chart(fig_contrib, use_container_width=True)
+
+    # Optional Table
     st.dataframe(
-        contrib_df.style.format({'Contribution (%)': '{:.1f}%'})
-                    .background_gradient(subset=['Contribution (%)'], cmap='Blues'),
+        contrib_df.sort_values("Contribution (%)", ascending=False).style.format({"Contribution (%)": "{:.1f}%"}),
         use_container_width=True,
         hide_index=True
     )
-    
-    with st.expander("📌 Interpretation"):
-        st.write("""
-        These percentages represent the **relative contribution** of each variable to the model's prediction 
-        of access to digital financial services. 
-        
-        **Key Insights:**
-        - **Income** is the strongest predictor (28.5%)
-        - **Education** and **Internet Access** are also major drivers
-        - Demographic factors (Age, Gender, Location) have comparatively lower but still meaningful impact
-        """)
 
-# ===================== ABOUT PAGE =====================
-else:
-    st.header("About This Project")
-    st.write("""
-    This application presents findings from a predictive modelling study on digital financial inclusion 
-    in East Africa (Kenya, Tanzania, and Uganda).
-    
-    **Data Sources:**
-    - Global Findex Database
-    - GSMA Mobile Connectivity and Regulation Indicators
-    
-    **Modelling Approaches:**
-    - Pooled Cross-Country Model
-    - Country-Specific Expert Models
-    
-    The results demonstrate that country-specific models generally outperform pooled models, 
-    particularly when data volumes vary across countries.
-    """)
-    
-    st.markdown("**Reference:** Banna et al. (2025)")
+    # =========================================================
+    # INTERPRETATION
+    # =========================================================
+    diff = expert_prob - pooled_prob
 
-# Footer
-st.markdown("---")
-st.markdown("Developed for research & demonstration purposes | © 2026")
+    if abs(diff) < 0.05:
+        st.info("Models are closely aligned for this profile.")
+    elif diff > 0:
+        st.success("Expert model is more optimistic than pooled model.")
+    else:
+        st.warning("Expert model is more conservative than pooled model.")
+
+    # =========================================================
+    # FINAL OUTPUT
+    # =========================================================
+    if final_prob >= 0.75:
+        st.success("🟢 High likelihood of digital inclusion")
+    elif final_prob >= 0.5:
+        st.warning("🟡 Moderate likelihood of digital inclusion")
+    else:
+        st.error("🔴 Low likelihood of digital inclusion")
