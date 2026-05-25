@@ -25,6 +25,7 @@ html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
 }
 
+/* CLEAN BACKGROUND (SWIFT-LIKE) */
 .stApp {
     background: linear-gradient(
         135deg,
@@ -34,6 +35,7 @@ html, body, [class*="css"] {
     );
 }
 
+/* MAIN CONTAINER */
 .main .block-container {
     background: rgba(255,255,255,0.82);
     backdrop-filter: blur(12px);
@@ -43,12 +45,17 @@ html, body, [class*="css"] {
     box-shadow: 0 10px 40px rgba(0,0,0,0.06);
 }
 
+/* =========================================================
+TITLE (VERY LARGE)
+========================================================= */
 h1 {
     font-size: 3.2rem !important;
     font-weight: 800 !important;
     color: #0B1F33 !important;
+    margin-bottom: 0.2rem;
 }
 
+/* SUBTITLE (SMALLER BUT STRONG) */
 .subtitle {
     font-size: 1.25rem;
     font-weight: 600;
@@ -56,6 +63,19 @@ h1 {
     margin-bottom: 1.5rem;
 }
 
+/* TEXT */
+p, div, span, label {
+    font-family: 'Inter', sans-serif;
+    color: #334E68 !important;
+}
+
+/* INPUTS */
+input, select {
+    border-radius: 12px !important;
+    border: 1px solid #D9E2EC !important;
+}
+
+/* BUTTON */
 .stButton > button {
     background: linear-gradient(90deg, #62D2B1, #4FBFA3);
     color: white;
@@ -73,7 +93,7 @@ h1 {
 """, unsafe_allow_html=True)
 
 # =========================================================
-# TITLE
+# TITLE (LARGE AS REQUESTED)
 # =========================================================
 st.markdown("# 🌍 Digital Finance Access Predictor")
 
@@ -83,13 +103,20 @@ East Africa Digital Financial Inclusion Intelligence System
 </div>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+This platform compares:
+- 🌐 Regional Pooled Model 
+- 🧠 Country Expert Models 
+- 🧭 Dynamic Routing System 
+""")
+
 # =========================================================
-# SESSION STATE INITIALIZATION
+# SESSION STATE
 # =========================================================
-if 'prediction_made' not in st.session_state:
-    st.session_state.prediction_made = False
+if 'page' not in st.session_state:
+    st.session_state.page = "input"
 if 'results' not in st.session_state:
-    st.session_state.results = {}
+    st.session_state.results = None
 
 # =========================================================
 # LOAD MODELS
@@ -115,114 +142,111 @@ country_defaults = {
 }
 
 # =========================================================
-# RESET FUNCTION
+# INPUT PAGE
 # =========================================================
-def reset_prediction():
-    st.session_state.prediction_made = False
-    st.session_state.results = {}
-    st.rerun()
+if st.session_state.page == "input":
+
+    st.subheader("👤 Enter User Profile")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        age = st.slider("Age", 18, 80, 30)
+        gender = st.radio("Gender", ["Male", "Female"])
+        residence = st.radio("Residence", ["Rural", "Urban"])
+
+    with col2:
+        income = st.selectbox("Income Quintile", [1,2,3,4,5])
+        education = st.selectbox("Education Level", [0,1,2,3,4],
+            format_func=lambda x: ["No Education","Primary","Secondary","Tertiary","Higher"][x])
+        internet = st.radio("Internet Use", ["No","Yes"])
+
+    with col3:
+        country = st.selectbox("Country", ["KEN","TZA","UGA"],
+            format_func=lambda x: country_defaults[x]["name"])
+
+    # =========================================================
+    # BUILD INPUT & PREDICT
+    # =========================================================
+    if st.button("🔮 Predict Digital Inclusion", type="primary", use_container_width=True):
+
+        c = country_defaults[country]
+
+        row = {
+            "female": 1 if gender == "Female" else 0,
+            "age": age,
+            "educ": education,
+            "inc_q": income,
+            "urbanicity": 1 if residence == "Urban" else 0,
+            "internet_use": 1 if internet == "Yes" else 0,
+            "dig_account": 0,
+            "anydigpayment": 0,
+            "wgt": 1.0,
+            "reg_index": c["reg_index"],
+            "num_providers": c["num_providers"],
+            "earliest_launch": c["earliest_launch"]
+        }
+
+        df_input = pd.DataFrame([row])
+        feature_names = models["feature_names"]
+        medians = models["medians"]
+
+        for col in feature_names:
+            if col not in df_input.columns:
+                df_input[col] = medians.get(col, 0)
+
+        df_input = df_input.reindex(columns=feature_names, fill_value=0)
+
+        # Make Prediction
+        probs, routing_info = predict_with_gating(df_input, True)
+        final_prob = probs[0]
+        routed = routing_info[0]
+
+        pooled_prob = models["pooled_model"].predict_proba(df_input)[0,1]
+
+        expert_prob = pooled_prob
+        if routed.startswith("Expert_"):
+            ctry = routed.replace("Expert_", "")
+            if ctry in models["experts"]:
+                expert_prob = models["experts"][ctry].predict_proba(df_input)[0,1]
+
+        # Save results
+        st.session_state.results = {
+            "pooled_prob": pooled_prob,
+            "expert_prob": expert_prob,
+            "final_prob": final_prob,
+            "routed": routed,
+            "country": country,
+            "age": age,
+            "gender": gender,
+            "residence": residence,
+            "income": income,
+            "education": education,
+            "internet": internet
+        }
+        
+        st.session_state.page = "results"
+        st.rerun()
 
 # =========================================================
-# INPUT FORM (Always visible at top)
+# RESULTS PAGE
 # =========================================================
-st.subheader("👤 Enter User Profile")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    age = st.slider("Age", 18, 80, 30, key="age")
-    gender = st.radio("Gender", ["Male", "Female"], key="gender")
-    residence = st.radio("Residence", ["Rural", "Urban"], key="residence")
-
-with col2:
-    income = st.selectbox("Income Quintile", [1,2,3,4,5], key="income")
-    education = st.selectbox("Education Level", [0,1,2,3,4],
-        format_func=lambda x: ["No Education","Primary","Secondary","Tertiary","Higher"][x], 
-        key="education")
-    internet = st.radio("Internet Use", ["No","Yes"], key="internet")
-
-with col3:
-    country = st.selectbox("Country", ["KEN","TZA","UGA"],
-        format_func=lambda x: country_defaults[x]["name"], key="country")
-
-# =========================================================
-# PREDICTION BUTTON
-# =========================================================
-if st.button("🔮 Predict Digital Inclusion", type="primary", use_container_width=True):
-    
-    c = country_defaults[country]
-
-    row = {
-        "female": 1 if gender == "Female" else 0,
-        "age": age,
-        "educ": education,
-        "inc_q": income,
-        "urbanicity": 1 if residence == "Urban" else 0,
-        "internet_use": 1 if internet == "Yes" else 0,
-        "dig_account": 0,
-        "anydigpayment": 0,
-        "wgt": 1.0,
-        "reg_index": c["reg_index"],
-        "num_providers": c["num_providers"],
-        "earliest_launch": c["earliest_launch"]
-    }
-
-    df_input = pd.DataFrame([row])
-    feature_names = models["feature_names"]
-    medians = models["medians"]
-
-    for col in feature_names:
-        if col not in df_input.columns:
-            df_input[col] = medians.get(col, 0)
-
-    df_input = df_input.reindex(columns=feature_names, fill_value=0)
-
-    # Make Prediction
-    probs, routing_info = predict_with_gating(df_input, True)
-    final_prob = probs[0]
-    routed = routing_info[0]
-
-    pooled_prob = models["pooled_model"].predict_proba(df_input)[0,1]
-
-    expert_prob = pooled_prob
-    if routed.startswith("Expert_"):
-        ctry = routed.replace("Expert_", "")
-        if ctry in models["experts"]:
-            expert_prob = models["experts"][ctry].predict_proba(df_input)[0,1]
-
-    # Store results in session state
-    st.session_state.results = {
-        "pooled_prob": pooled_prob,
-        "expert_prob": expert_prob,
-        "final_prob": final_prob,
-        "routed": routed,
-        "country": country
-    }
-    st.session_state.prediction_made = True
-    st.rerun()
-
-# =========================================================
-# RESULTS SECTION - Shown at the TOP after prediction
-# =========================================================
-if st.session_state.prediction_made and st.session_state.results:
-    
+else:  # Results Page
     res = st.session_state.results
-    
-    st.markdown("---")
+
     st.subheader("📊 Prediction Results")
 
-    # Reset Button (Top Right)
-    col_reset, _ = st.columns([1, 4])
-    with col_reset:
-        if st.button("🔄 New Prediction", type="secondary"):
-            reset_prediction()
+    # Back Button
+    if st.button("🔄 New Prediction", type="secondary"):
+        st.session_state.page = "input"
+        st.rerun()
 
-    # Metrics
     col1, col2, col3, col4 = st.columns(4)
+
     col1.metric("🌐 Pooled Model", f"{res['pooled_prob']:.1%}")
     col2.metric("🧠 Expert Model", f"{res['expert_prob']:.1%}")
     col3.metric("🧭 Routed Model", res['routed'])
-    col4.metric("🎯 Final Prediction", f"{res['final_prob']:.1%}", delta="Best")
+    col4.metric("🎯 Final", f"{res['final_prob']:.1%}")
 
     # Model Comparison Chart
     fig = go.Figure()
@@ -233,16 +257,17 @@ if st.session_state.prediction_made and st.session_state.results:
         textposition="outside"
     ))
     fig.update_layout(
-        title="Pooled vs Expert Model Performance",
+        title="Expert vs Pooled Contribution",
         yaxis_title="Probability (%)",
-        height=400,
-        plot_bgcolor="rgba(0,0,0,0)"
+        height=420,
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter")
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Feature Contribution Graph
+    # ===================== FEATURE CONTRIBUTION =====================
     st.markdown("---")
-    st.subheader("🔍 Key Factors Contribution")
+    st.subheader("🔍 Key Factors Contribution to Digital Finance Access")
 
     feature_contrib = {
         "Income": 29.8,
@@ -267,21 +292,24 @@ if st.session_state.prediction_made and st.session_state.results:
         textposition='outside',
         marker_color='#4FBFA3'
     ))
+
     fig_contrib.update_layout(
         title="What Drives Digital Finance Access?",
         xaxis_title="Contribution to Prediction (%)",
-        height=420
+        height=420,
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter")
     )
+
     st.plotly_chart(fig_contrib, use_container_width=True)
 
-    # Final Interpretation
-    final_prob = res['final_prob']
-    if final_prob >= 0.75:
-        st.success("🟢 **High likelihood** of digital financial inclusion")
-    elif final_prob >= 0.5:
-        st.warning("🟡 **Moderate likelihood** of digital financial inclusion")
+    # Interpretation
+    if res['final_prob'] >= 0.75:
+        st.success("🟢 High likelihood of digital inclusion")
+    elif res['final_prob'] >= 0.5:
+        st.warning("🟡 Moderate likelihood of digital inclusion")
     else:
-        st.error("🔴 **Low likelihood** of digital financial inclusion")
+        st.error("🔴 Low likelihood of digital inclusion")
 
 # Footer
 st.markdown("---")
