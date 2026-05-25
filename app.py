@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 from routing import predict_with_gating
 
 # =========================================================
@@ -17,23 +14,39 @@ st.set_page_config(
 )
 
 # =========================================================
-# LIGHT SWIFT-STYLE UI
+# MODERN FINTECH UI
 # =========================================================
 st.markdown("""
 <style>
+
+/* =====================================================
+IMPORT FONT
+===================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* =====================================================
+GLOBAL FONT
+===================================================== */
+
+html, body, [class*="css"] {
+
+    font-family: 'Inter', sans-serif;
+}
 
 /* =====================================================
 BACKGROUND
 ===================================================== */
 
 .stApp {
+
     background:
     linear-gradient(
         135deg,
-        #EDF4F7 0%,
-        #DDEBEC 35%,
-        #CDE3E0 70%,
-        #BFE8DF 100%
+        #F4F8FA 0%,
+        #E7F0F2 35%,
+        #D8ECE8 70%,
+        #CDEEE6 100%
     );
 }
 
@@ -43,86 +56,123 @@ MAIN CONTAINER
 
 .main .block-container {
 
-    background: rgba(255,255,255,0.75);
+    background: rgba(255,255,255,0.78);
 
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(14px);
 
-    padding: 2.5rem;
+    padding: 2.8rem;
 
-    border-radius: 24px;
+    border-radius: 28px;
 
-    border: 1px solid rgba(255,255,255,0.35);
+    border: 1px solid rgba(255,255,255,0.45);
 
     box-shadow:
-    0 8px 32px rgba(0,0,0,0.08);
+    0 10px 40px rgba(0,0,0,0.07);
 }
 
 /* =====================================================
 HEADINGS
 ===================================================== */
 
-h1, h2, h3, h4 {
+h1 {
 
-    color: #1F2A44 !important;
+    color: #102A43 !important;
+
+    font-size: 2.5rem !important;
 
     font-weight: 700 !important;
+}
+
+h2, h3, h4 {
+
+    color: #243B53 !important;
+
+    font-weight: 600 !important;
 }
 
 /* =====================================================
 TEXT
 ===================================================== */
 
-p, div, label, span {
+p, div, span {
 
-    color: #2D3748 !important;
+    color: #334E68 !important;
 
     font-size: 15px !important;
 }
 
 /* =====================================================
-INPUTS
+LABELS
 ===================================================== */
 
-input,
-textarea,
-select {
+label {
 
-    background-color: white !important;
+    color: #243B53 !important;
 
-    color: #1F2A44 !important;
-
-    border-radius: 12px !important;
-
-    border: 1px solid #D6E2E5 !important;
+    font-weight: 600 !important;
 }
 
 /* =====================================================
 SELECT BOX
 ===================================================== */
 
-.stSelectbox div {
+.stSelectbox > div > div {
 
-    background-color: white !important;
+    background: rgba(255,255,255,0.95) !important;
 
-    color: #1F2A44 !important;
+    border-radius: 14px !important;
+
+    border: 1px solid #D9E2EC !important;
+
+    color: #102A43 !important;
+
+    min-height: 48px;
 }
 
 /* =====================================================
-METRIC CARDS
+INPUTS
+===================================================== */
+
+input {
+
+    background: rgba(255,255,255,0.95) !important;
+
+    border-radius: 14px !important;
+
+    border: 1px solid #D9E2EC !important;
+
+    color: #102A43 !important;
+}
+
+/* =====================================================
+RADIO BUTTONS
+===================================================== */
+
+.stRadio {
+
+    background: rgba(255,255,255,0.45);
+
+    padding: 0.7rem;
+
+    border-radius: 14px;
+}
+
+/* =====================================================
+METRICS
 ===================================================== */
 
 [data-testid="metric-container"] {
 
     background: rgba(255,255,255,0.90);
 
-    border-radius: 18px;
+    border-radius: 20px;
 
-    padding: 1rem;
+    padding: 1.2rem;
 
-    border: 1px solid #D8E5E7;
+    border: 1px solid #D9E2EC;
 
     box-shadow:
-    0 4px 12px rgba(0,0,0,0.05);
+    0 4px 14px rgba(0,0,0,0.04);
 }
 
 /* =====================================================
@@ -134,33 +184,31 @@ BUTTON
     background:
     linear-gradient(
         90deg,
-        #88D8C3,
-        #70CDB7
+        #6FD3C0,
+        #56C6B0
     );
 
-    color: #1F2A44;
+    color: white !important;
 
     border: none;
 
-    border-radius: 12px;
+    border-radius: 16px;
 
-    padding: 0.8rem 1.6rem;
-
-    font-weight: 700;
+    padding: 0.9rem 1.8rem;
 
     font-size: 16px;
+
+    font-weight: 600;
+
+    transition: all 0.25s ease;
 }
 
 .stButton > button:hover {
 
-    background:
-    linear-gradient(
-        90deg,
-        #9BE5D3,
-        #82D9C5
-    );
+    transform: translateY(-1px);
 
-    color: #1F2A44;
+    box-shadow:
+    0 8px 20px rgba(86,198,176,0.25);
 }
 
 /* =====================================================
@@ -169,7 +217,7 @@ PROGRESS BAR
 
 .stProgress > div > div > div {
 
-    background-color: #70CDB7;
+    background-color: #56C6B0;
 }
 
 </style>
@@ -191,7 +239,7 @@ This platform predicts the likelihood of digital financial inclusion using:
 """)
 
 # =========================================================
-# LOAD METADATA
+# LOAD MODELS
 # =========================================================
 @st.cache_resource
 def load_metadata():
@@ -204,14 +252,6 @@ def load_metadata():
 
         "medians": joblib.load(
             "medians.joblib"
-        ),
-
-        "experts": joblib.load(
-            "experts.joblib"
-        ),
-
-        "pooled": joblib.load(
-            "model_pooled.joblib"
         )
     }
 
@@ -342,7 +382,7 @@ row = {
 
     "internet_use": 1 if internet == "Yes" else 0,
 
-    # TEMPORARY COMPATIBILITY FEATURES
+    # TEMPORARY MODEL COMPATIBILITY
     "dig_account": 0,
 
     "anydigpayment": 0,
@@ -393,6 +433,9 @@ if st.button("🔮 Predict Digital Inclusion"):
 
         routed_model = routing_info[0]
 
+        # =================================================
+        # RESULTS
+        # =================================================
         st.markdown("---")
 
         st.subheader("📊 Prediction Results")
@@ -440,80 +483,98 @@ if st.button("🔮 Predict Digital Inclusion"):
         # =================================================
         # INTERPRETATION
         # =================================================
+        st.markdown("### 🧭 Personalized Inclusion Drivers")
+
+        positive_factors = []
+
+        risk_factors = []
+
+        # POSITIVE FACTORS
+        if education >= 3:
+
+            positive_factors.append(
+                "✅ Higher education level improves digital financial readiness"
+            )
+
+        if residence == "Urban":
+
+            positive_factors.append(
+                "✅ Urban residence improves access to digital infrastructure"
+            )
+
+        if income >= 3:
+
+            positive_factors.append(
+                "✅ Middle-to-high income improves financial accessibility"
+            )
+
+        if country == "KEN":
+
+            positive_factors.append(
+                "✅ Kenya's mature mobile money ecosystem supports inclusion"
+            )
+
+        if internet == "Yes":
+
+            positive_factors.append(
+                "✅ Internet access significantly supports digital finance usage"
+            )
+
+        # RISK FACTORS
+        if internet == "No":
+
+            risk_factors.append(
+                "⚠ Lack of internet access may reduce digital service adoption"
+            )
+
+        if residence == "Rural":
+
+            risk_factors.append(
+                "⚠ Rural residence may reduce proximity to digital financial services"
+            )
+
+        if income <= 2:
+
+            risk_factors.append(
+                "⚠ Lower income levels may limit access to financial technologies"
+            )
+
+        if education <= 1:
+
+            risk_factors.append(
+                "⚠ Lower education levels may reduce digital financial literacy"
+            )
+
+        # DISPLAY POSITIVE FACTORS
+        if positive_factors:
+
+            st.success("\n\n".join(positive_factors))
+
+        # DISPLAY RISK FACTORS
+        if risk_factors:
+
+            st.warning("\n\n".join(risk_factors))
+
+        # FINAL SUMMARY
+        st.markdown("---")
+
         if final_prob >= 0.75:
 
             st.success(
-                "🟢 High likelihood of digital financial inclusion"
+                "🟢 This profile demonstrates a strong likelihood of digital financial inclusion."
             )
 
         elif final_prob >= 0.50:
 
             st.warning(
-                "🟡 Moderate likelihood of digital financial inclusion"
+                "🟡 This profile demonstrates moderate likelihood of digital financial inclusion."
             )
 
         else:
 
             st.error(
-                "🔴 Low likelihood of digital financial inclusion"
+                "🔴 This profile may face structural or socioeconomic barriers to digital financial inclusion."
             )
-
-        # =================================================
-        # FEATURE IMPORTANCE
-        # =================================================
-        st.markdown("---")
-
-        st.subheader(
-            "🔍 Top Features Influencing Prediction"
-        )
-
-        if routed_model.startswith("Expert"):
-
-            country_key = routed_model.replace(
-                "Expert_",
-                ""
-            )
-
-            model = models["experts"][country_key]
-
-        else:
-
-            model = models["pooled"]
-
-        if hasattr(model, "feature_importances_"):
-
-            importance = pd.Series(
-                model.feature_importances_,
-                index=feature_names
-            )
-
-            importance = importance.sort_values(
-                ascending=False
-            ).head(10)
-
-            fig, ax = plt.subplots(
-                figsize=(10,6)
-            )
-
-            sns.barplot(
-                x=importance.values,
-                y=importance.index,
-                ax=ax
-            )
-
-            ax.set_title(
-                "Top 10 Important Features"
-            )
-
-            ax.set_xlabel(
-                "Importance Score"
-            )
-
-            ax.set_ylabel(
-                "Features"
-            )
-
-            st.pyplot(fig)
 
     except Exception as e:
 
