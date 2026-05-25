@@ -5,6 +5,8 @@ import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from routing import predict_with_gating
+
 # =========================================================
 # PAGE CONFIG
 # =========================================================
@@ -15,86 +17,125 @@ st.set_page_config(
 )
 
 # =========================================================
-# SWIFT-STYLE UI
+# LIGHT SWIFT-STYLE UI
 # =========================================================
 st.markdown("""
 <style>
 
-/* MAIN BACKGROUND */
+/* =====================================================
+BACKGROUND
+===================================================== */
+
 .stApp {
     background:
     linear-gradient(
         135deg,
-        #2F3B3F 0%,
-        #556B70 40%,
-        #7FA8A3 75%,
-        #AEE6DB 100%
+        #EDF4F7 0%,
+        #DDEBEC 35%,
+        #CDE3E0 70%,
+        #BFE8DF 100%
     );
 }
 
-/* MAIN CONTAINER */
+/* =====================================================
+MAIN CONTAINER
+===================================================== */
+
 .main .block-container {
 
-    background: rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.75);
 
     backdrop-filter: blur(10px);
 
     padding: 2.5rem;
 
-    border-radius: 22px;
+    border-radius: 24px;
 
-    border: 1px solid rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.35);
 
     box-shadow:
-    0 8px 32px rgba(0,0,0,0.15);
+    0 8px 32px rgba(0,0,0,0.08);
 }
 
-/* TEXT */
-h1, h2, h3, h4, h5, h6, p, div, label {
+/* =====================================================
+HEADINGS
+===================================================== */
 
-    color: white !important;
+h1, h2, h3, h4 {
+
+    color: #1F2A44 !important;
+
+    font-weight: 700 !important;
 }
 
-/* INPUTS */
+/* =====================================================
+TEXT
+===================================================== */
+
+p, div, label, span {
+
+    color: #2D3748 !important;
+
+    font-size: 15px !important;
+}
+
+/* =====================================================
+INPUTS
+===================================================== */
+
 input,
 textarea,
 select {
 
-    background-color: rgba(255,255,255,0.96) !important;
+    background-color: white !important;
 
     color: #1F2A44 !important;
 
-    border-radius: 10px !important;
+    border-radius: 12px !important;
+
+    border: 1px solid #D6E2E5 !important;
 }
 
-/* SELECT BOX */
+/* =====================================================
+SELECT BOX
+===================================================== */
+
 .stSelectbox div {
 
-    background-color: rgba(255,255,255,0.96) !important;
+    background-color: white !important;
 
     color: #1F2A44 !important;
 }
 
-/* METRICS */
+/* =====================================================
+METRIC CARDS
+===================================================== */
+
 [data-testid="metric-container"] {
 
-    background: rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.90);
 
     border-radius: 18px;
 
     padding: 1rem;
 
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid #D8E5E7;
+
+    box-shadow:
+    0 4px 12px rgba(0,0,0,0.05);
 }
 
-/* BUTTON */
+/* =====================================================
+BUTTON
+===================================================== */
+
 .stButton > button {
 
     background:
     linear-gradient(
         90deg,
-        #AEE6DB,
-        #8DD7C8
+        #88D8C3,
+        #70CDB7
     );
 
     color: #1F2A44;
@@ -103,7 +144,7 @@ select {
 
     border-radius: 12px;
 
-    padding: 0.8rem 1.5rem;
+    padding: 0.8rem 1.6rem;
 
     font-weight: 700;
 
@@ -115,11 +156,20 @@ select {
     background:
     linear-gradient(
         90deg,
-        #C5F5EC,
-        #9FE6D8
+        #9BE5D3,
+        #82D9C5
     );
 
     color: #1F2A44;
+}
+
+/* =====================================================
+PROGRESS BAR
+===================================================== */
+
+.stProgress > div > div > div {
+
+    background-color: #70CDB7;
 }
 
 </style>
@@ -133,7 +183,7 @@ st.title("🌍 Digital Finance Access Predictor")
 st.markdown("""
 ### East Africa Digital Financial Inclusion Intelligence System
 
-This platform predicts digital financial inclusion using:
+This platform predicts the likelihood of digital financial inclusion using:
 
 - 🌐 Regional Pooled Intelligence
 - 🧠 Country Expert Models
@@ -141,24 +191,12 @@ This platform predicts digital financial inclusion using:
 """)
 
 # =========================================================
-# LOAD MODELS
+# LOAD METADATA
 # =========================================================
 @st.cache_resource
-def load_models():
+def load_metadata():
 
-    models = {
-
-        "pooled": joblib.load(
-            "model_pooled.joblib"
-        ),
-
-        "experts": joblib.load(
-            "experts.joblib"
-        ),
-
-        "gating": joblib.load(
-            "gating_model.joblib"
-        ),
+    return {
 
         "feature_names": joblib.load(
             "feature_names.joblib"
@@ -166,19 +204,20 @@ def load_models():
 
         "medians": joblib.load(
             "medians.joblib"
+        ),
+
+        "experts": joblib.load(
+            "experts.joblib"
+        ),
+
+        "pooled": joblib.load(
+            "model_pooled.joblib"
         )
     }
 
-    return models
-
-# =========================================================
-# LOAD
-# =========================================================
 try:
 
-    models = load_models()
-
-    st.success("✅ Models loaded successfully")
+    models = load_metadata()
 
 except Exception as e:
 
@@ -192,23 +231,35 @@ except Exception as e:
 country_defaults = {
 
     "KEN": {
+
         "name": "Kenya",
+
         "reg_index": 95,
+
         "num_providers": 7,
+
         "earliest_launch": 2007
     },
 
     "TZA": {
+
         "name": "Tanzania",
+
         "reg_index": 82,
+
         "num_providers": 5,
+
         "earliest_launch": 2008
     },
 
     "UGA": {
+
         "name": "Uganda",
+
         "reg_index": 78,
+
         "num_providers": 4,
+
         "earliest_launch": 2009
     }
 }
@@ -218,9 +269,9 @@ country_defaults = {
 # =========================================================
 st.subheader("👤 Enter User Profile")
 
-c1, c2, c3 = st.columns(3)
+col1, col2, col3 = st.columns(3)
 
-with c1:
+with col1:
 
     age = st.slider(
         "Age",
@@ -234,40 +285,40 @@ with c1:
         ["Male", "Female"]
     )
 
-    location = st.radio(
+    residence = st.radio(
         "Residence",
         ["Rural", "Urban"]
     )
 
-with c2:
+with col2:
 
     income = st.selectbox(
         "Income Quintile",
-        [1,2,3,4,5]
+        [1, 2, 3, 4, 5]
     )
 
     education = st.selectbox(
         "Education Level",
         [0,1,2,3,4],
         format_func=lambda x: {
-            0:"No Education",
-            1:"Primary",
-            2:"Secondary",
-            3:"Tertiary",
-            4:"Higher"
+            0: "No Education",
+            1: "Primary",
+            2: "Secondary",
+            3: "Tertiary",
+            4: "Higher"
         }[x]
     )
 
     internet = st.radio(
         "Internet Use",
-        ["No","Yes"]
+        ["No", "Yes"]
     )
 
-with c3:
+with col3:
 
     country = st.selectbox(
         "Country",
-        ["KEN","TZA","UGA"],
+        ["KEN", "TZA", "UGA"],
         format_func=lambda x:
         country_defaults[x]["name"]
     )
@@ -287,10 +338,18 @@ row = {
 
     "inc_q": income,
 
-    "urbanicity": 1 if location == "Urban" else 0,
+    "urbanicity": 1 if residence == "Urban" else 0,
 
     "internet_use": 1 if internet == "Yes" else 0,
 
+    # TEMPORARY COMPATIBILITY FEATURES
+    "dig_account": 0,
+
+    "anydigpayment": 0,
+
+    "wgt": 1.0,
+
+    # COUNTRY FEATURES
     "reg_index": country_data["reg_index"],
 
     "num_providers": country_data["num_providers"],
@@ -303,70 +362,20 @@ df_input = pd.DataFrame([row])
 # =========================================================
 # FEATURE ALIGNMENT
 # =========================================================
-FEATURES = models["feature_names"]
+feature_names = models["feature_names"]
 
-for col in FEATURES:
+medians = models["medians"]
+
+for col in feature_names:
 
     if col not in df_input.columns:
 
-        df_input[col] = models["medians"].get(col, 0)
+        df_input[col] = medians.get(col, 0)
 
 df_input = df_input.reindex(
-    columns=FEATURES,
+    columns=feature_names,
     fill_value=0
 )
-
-# =========================================================
-# PREDICTION FUNCTION
-# =========================================================
-def predict_with_gating(df):
-
-    pooled_model = models["pooled"]
-
-    experts = models["experts"]
-
-    gating_model = models["gating"]
-
-    # ROUTING
-    routed_country = gating_model.predict(df)[0]
-
-    # POOLED
-    pooled_prob = pooled_model.predict_proba(df)[0,1]
-
-    # DEFAULT
-    expert_prob = pooled_prob
-
-    routed_model = "Pooled"
-
-    # EXPERT
-    if routed_country in experts:
-
-        try:
-
-            expert_model = experts[routed_country]
-
-            expert_prob = expert_model.predict_proba(
-                df
-            )[0,1]
-
-            routed_model = f"Expert_{routed_country}"
-
-        except:
-            pass
-
-    # ENSEMBLE
-    final_prob = (
-        pooled_prob * 0.7
-        +
-        expert_prob * 0.3
-    )
-
-    return (
-        final_prob,
-        pooled_prob,
-        expert_prob,
-        routed_model
-    )
 
 # =========================================================
 # RUN PREDICTION
@@ -375,12 +384,14 @@ if st.button("🔮 Predict Digital Inclusion"):
 
     try:
 
-        (
-            final_prob,
-            pooled_prob,
-            expert_prob,
-            routed_model
-        ) = predict_with_gating(df_input)
+        probs, routing_info = predict_with_gating(
+            df_input,
+            return_routing_info=True
+        )
+
+        final_prob = probs[0]
+
+        routed_model = routing_info[0]
 
         st.markdown("---")
 
@@ -391,31 +402,44 @@ if st.button("🔮 Predict Digital Inclusion"):
         with m1:
 
             st.metric(
-                "🌐 Pooled Model",
-                f"{pooled_prob:.1%}"
+                "🌐 Final Probability",
+                f"{final_prob:.1%}"
             )
 
         with m2:
-
-            st.metric(
-                "🧠 Expert Model",
-                f"{expert_prob:.1%}"
-            )
-
-        with m3:
 
             st.metric(
                 "🧭 Routed To",
                 routed_model
             )
 
+        with m3:
+
+            if final_prob >= 0.75:
+
+                category = "High"
+
+            elif final_prob >= 0.50:
+
+                category = "Moderate"
+
+            else:
+
+                category = "Low"
+
+            st.metric(
+                "📌 Inclusion Level",
+                category
+            )
+
+        # =================================================
+        # PROGRESS BAR
+        # =================================================
         st.progress(float(final_prob))
 
-        st.subheader(
-            f"🎯 Final Probability: {final_prob:.1%}"
-        )
-
+        # =================================================
         # INTERPRETATION
+        # =================================================
         if final_prob >= 0.75:
 
             st.success(
@@ -425,7 +449,7 @@ if st.button("🔮 Predict Digital Inclusion"):
         elif final_prob >= 0.50:
 
             st.warning(
-                "🟡 Moderate likelihood"
+                "🟡 Moderate likelihood of digital financial inclusion"
             )
 
         else:
@@ -434,9 +458,9 @@ if st.button("🔮 Predict Digital Inclusion"):
                 "🔴 Low likelihood of digital financial inclusion"
             )
 
-        # =====================================================
+        # =================================================
         # FEATURE IMPORTANCE
-        # =====================================================
+        # =================================================
         st.markdown("---")
 
         st.subheader(
@@ -457,8 +481,6 @@ if st.button("🔮 Predict Digital Inclusion"):
             model = models["pooled"]
 
         if hasattr(model, "feature_importances_"):
-
-            feature_names = FEATURES
 
             importance = pd.Series(
                 model.feature_importances_,
@@ -483,6 +505,14 @@ if st.button("🔮 Predict Digital Inclusion"):
                 "Top 10 Important Features"
             )
 
+            ax.set_xlabel(
+                "Importance Score"
+            )
+
+            ax.set_ylabel(
+                "Features"
+            )
+
             st.pyplot(fig)
 
     except Exception as e:
@@ -495,5 +525,5 @@ if st.button("🔮 Predict Digital Inclusion"):
 st.markdown("---")
 
 st.caption(
-    "Digital Finance Access Predictor • East Africa"
+    "Digital Finance Access Predictor • Mixture-of-Experts Architecture • East Africa"
 )
