@@ -128,7 +128,7 @@ def build_input_row(feature_columns, country, age, gender, residence, income, ed
     input_data = pd.DataFrame(
         np.zeros((1, len(feature_columns))),
         columns=feature_columns
-        
+    )
 values = {
     "age": age,
     "gender": 1 if gender == "Female" else 2,
