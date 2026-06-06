@@ -1,8 +1,14 @@
+# ==========================================================
+# CELL 28 - GENERATE STREAMLIT APP
+# ==========================================================
+
+app_code = r'''
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
+import os
 import plotly.graph_objects as go
-from routing import predict_with_gating
 
 # =========================================================
 # PAGE CONFIG
@@ -29,7 +35,6 @@ h1 {
     font-size: 3.1rem !important;
     font-weight: 700 !important;
     color: #0F2B46 !important;
-    letter-spacing: -0.02em;
 }
 
 .subtitle {
@@ -39,23 +44,19 @@ h1 {
     margin-bottom: 1.8rem;
 }
 
-/* Executive Background */
 .stApp {
     background: linear-gradient(135deg, #F8FAFC 0%, #E6F0F5 100%);
 }
 
 .main .block-container {
     background: rgba(255,255,255,0.95);
-    backdrop-filter: blur(16px);
     padding: 2.2rem;
     border-radius: 24px;
-    border: 1px solid rgba(255,255,255,0.6);
     box-shadow: 0 15px 35px rgba(15,43,70,0.08);
     max-width: 1350px;
     margin: 1rem auto;
 }
 
-/* Clean Cards */
 div[data-testid="stMetric"] {
     background: white;
     border-radius: 16px;
@@ -63,7 +64,6 @@ div[data-testid="stMetric"] {
     box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
 
-/* Buttons */
 .stButton > button {
     background: linear-gradient(90deg, #1E88E5, #1565C0);
     color: white;
@@ -71,12 +71,6 @@ div[data-testid="stMetric"] {
     border-radius: 12px;
     padding: 0.75rem 1.8rem;
     font-size: 1.05rem;
-    transition: all 0.3s;
-}
-
-.stButton > button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(21,101,192,0.3);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -85,38 +79,125 @@ div[data-testid="stMetric"] {
 # TITLE
 # =========================================================
 st.markdown("# 🌍 Digital Finance Access Predictor")
-st.markdown('<div class="subtitle">East Africa • Executive Intelligence Platform</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="subtitle">East Africa • Executive Intelligence Platform</div>',
+    unsafe_allow_html=True
+)
 
 # =========================================================
 # SESSION STATE
 # =========================================================
-if 'page' not in st.session_state:
+if "page" not in st.session_state:
     st.session_state.page = "input"
-if 'results' not in st.session_state:
+
+if "results" not in st.session_state:
     st.session_state.results = None
 
 # =========================================================
 # LOAD MODELS
 # =========================================================
+MODEL_PATH = "Financial_Inclusion_Models"
+
 @st.cache_resource
-def load_metadata():
+def load_models():
     return {
-        "feature_names": joblib.load("feature_names.joblib"),
-        "medians": joblib.load("medians.joblib"),
-        "pooled_model": joblib.load("model_pooled.joblib"),
-        "experts": joblib.load("experts.joblib")
+        "feature_columns": joblib.load(os.path.join(MODEL_PATH, "feature_columns.joblib")),
+        "pooled_model": joblib.load(os.path.join(MODEL_PATH, "pooled_model.joblib")),
+        "harmonized_model": joblib.load(os.path.join(MODEL_PATH, "harmonized_model.joblib")),
+        "expert_models": {
+            "KEN": joblib.load(os.path.join(MODEL_PATH, "expert_model_KEN.joblib")),
+            "TZA": joblib.load(os.path.join(MODEL_PATH, "expert_model_TZA.joblib")),
+            "UGA": joblib.load(os.path.join(MODEL_PATH, "expert_model_UGA.joblib"))
+        },
+        "routing_model": joblib.load(os.path.join(MODEL_PATH, "routing_model.joblib"))
     }
 
-models = load_metadata()
+models = load_models()
 
 # =========================================================
 # COUNTRY CONFIG
 # =========================================================
 country_defaults = {
-    "KEN": {"name": "Kenya", "reg_index": 95, "num_providers": 7, "earliest_launch": 2007},
-    "TZA": {"name": "Tanzania", "reg_index": 82, "num_providers": 5, "earliest_launch": 2008},
-    "UGA": {"name": "Uganda", "reg_index": 78, "num_providers": 4, "earliest_launch": 2009}
+    "KEN": {"name": "Kenya"},
+    "TZA": {"name": "Tanzania"},
+    "UGA": {"name": "Uganda"}
 }
+
+# =========================================================
+# HELPER FUNCTIONS
+# =========================================================
+def build_input_row(feature_columns, country, age, gender, residence, income, education, internet):
+
+    input_data = pd.DataFrame(
+        np.zeros((1, len(feature_columns))),
+        columns=feature_columns
+    )
+
+    manual_map = {
+        "age": age,
+        "female": 1 if gender == "Female" else 0,
+        "inc_q": income,
+        "educ": education,
+        "urbanicity": 1 if residence == "Urban" else 0,
+        "internet_use": 1 if internet == "Yes" else 0,
+    }
+
+    for col, value in manual_map.items():
+        if col in input_data.columns:
+            input_data[col] = value
+
+    for col in input_data.columns:
+        if col == f"country_code_{country}":
+            input_data[col] = 1
+
+    return input_data
+
+
+def predict_all(input_data):
+
+    pooled_prob = models["pooled_model"].predict_proba(input_data)[0, 1]
+
+    harmonized_prob = models["harmonized_model"].predict_proba(input_data)[0, 1]
+
+    expert_probs = {}
+
+    for c, model in models["expert_models"].items():
+        expert_probs[f"Expert_{c}"] = model.predict_proba(input_data)[0, 1]
+
+    model_probs = pd.DataFrame({
+        "Pooled": [pooled_prob],
+        "Harmonized": [harmonized_prob],
+        **expert_probs
+    })
+
+    router_input = pd.concat(
+        [input_data, model_probs],
+        axis=1
+    )
+
+    routed_model = models["routing_model"].predict(router_input)[0]
+
+    final_prob = model_probs[routed_model].iloc[0]
+
+    return model_probs, routed_model, final_prob
+
+
+def get_feature_impact(selected_model_name):
+
+    if selected_model_name == "Pooled":
+        model = models["pooled_model"]
+    elif selected_model_name == "Harmonized":
+        model = models["harmonized_model"]
+    else:
+        country = selected_model_name.replace("Expert_", "")
+        model = models["expert_models"][country]
+
+    fi = pd.DataFrame({
+        "Feature": models["feature_columns"],
+        "Importance": model.feature_importances_
+    })
+
+    return fi.sort_values("Importance", ascending=False).head(10)
 
 # =========================================================
 # INPUT PAGE
@@ -133,74 +214,59 @@ if st.session_state.page == "input":
         residence = st.radio("Residence", ["Rural", "Urban"], horizontal=True)
 
     with col2:
-        income = st.selectbox("Income Quintile", [1,2,3,4,5])
-        education = st.selectbox("Education Level", [0,1,2,3,4],
-            format_func=lambda x: ["No Education","Primary","Secondary","Tertiary","Higher"][x])
-        internet = st.radio("Internet Use", ["No","Yes"], horizontal=True)
+        income = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
+        education = st.selectbox(
+            "Education Level",
+            [0, 1, 2, 3, 4],
+            format_func=lambda x: ["No Education", "Primary", "Secondary", "Tertiary", "Higher"][x]
+        )
+        internet = st.radio("Internet Use", ["No", "Yes"], horizontal=True)
 
     with col3:
-        country = st.selectbox("Country", ["KEN","TZA","UGA"],
-            format_func=lambda x: country_defaults[x]["name"])
+        country = st.selectbox(
+            "Country",
+            ["KEN", "TZA", "UGA"],
+            format_func=lambda x: country_defaults[x]["name"]
+        )
 
     if st.button("🔮 Generate Prediction", type="primary", use_container_width=True):
-        
-        c = country_defaults[country]
 
-        row = {
-            "female": 1 if gender == "Female" else 0,
-            "age": age,
-            "educ": education,
-            "inc_q": income,
-            "urbanicity": 1 if residence == "Urban" else 0,
-            "internet_use": 1 if internet == "Yes" else 0,
-            "dig_account": 0,
-            "anydigpayment": 0,
-            "wgt": 1.0,
-            "reg_index": c["reg_index"],
-            "num_providers": c["num_providers"],
-            "earliest_launch": c["earliest_launch"]
-        }
+        input_data = build_input_row(
+            models["feature_columns"],
+            country,
+            age,
+            gender,
+            residence,
+            income,
+            education,
+            internet
+        )
 
-        df_input = pd.DataFrame([row])
-        feature_names = models["feature_names"]
-        medians = models["medians"]
-
-        for col in feature_names:
-            if col not in df_input.columns:
-                df_input[col] = medians.get(col, 0)
-
-        df_input = df_input.reindex(columns=feature_names, fill_value=0)
-
-        # Prediction
-        probs, routing_info = predict_with_gating(df_input, True)
-        final_prob = probs[0]
-        routed = routing_info[0]
-
-        pooled_prob = models["pooled_model"].predict_proba(df_input)[0,1]
-
-        expert_prob = pooled_prob
-        if routed.startswith("Expert_"):
-            ctry = routed.replace("Expert_", "")
-            if ctry in models["experts"]:
-                expert_prob = models["experts"][ctry].predict_proba(df_input)[0,1]
+        model_probs, routed_model, final_prob = predict_all(input_data)
 
         st.session_state.results = {
-            "pooled_prob": pooled_prob,
-            "expert_prob": expert_prob,
+            "model_probs": model_probs,
+            "routed_model": routed_model,
             "final_prob": final_prob,
-            "routed": routed,
-            "age": age, "gender": gender, "residence": residence,
-            "income": income, "education": education, "internet": internet
+            "age": age,
+            "gender": gender,
+            "residence": residence,
+            "income": income,
+            "education": education,
+            "internet": internet,
+            "country": country
         }
-        
+
         st.session_state.page = "results"
         st.rerun()
 
 # =========================================================
-# RESULTS PAGE (Optimized to fit one screen)
+# RESULTS PAGE
 # =========================================================
 else:
+
     res = st.session_state.results
+    model_probs = res["model_probs"]
 
     st.subheader("📊 Prediction Results")
 
@@ -208,63 +274,99 @@ else:
         st.session_state.page = "input"
         st.rerun()
 
-    # Metrics Row
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🌐 Pooled Model", f"{res['pooled_prob']:.1%}")
-    col2.metric("🧠 Expert Model", f"{res['expert_prob']:.1%}")
-    col3.metric("🧭 Routed Model", res['routed'])
-    col4.metric("🎯 **Final Score**", f"{res['final_prob']:.1%}", delta="Recommended")
+    pooled_prob = model_probs["Pooled"].iloc[0]
+    harmonized_prob = model_probs["Harmonized"].iloc[0]
 
-    # Two Charts Side by Side
+    expert_cols = [c for c in model_probs.columns if c.startswith("Expert_")]
+    best_expert = model_probs[expert_cols].idxmax(axis=1).iloc[0]
+    best_expert_prob = model_probs[best_expert].iloc[0]
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("🌐 Pooled Model", f"{pooled_prob:.1%}")
+    col2.metric("🧩 Harmonized Model", f"{harmonized_prob:.1%}")
+    col3.metric("🧠 Best Expert", f"{best_expert_prob:.1%}")
+    col4.metric("🎯 Final MoE Score", f"{res['final_prob']:.1%}")
+
+    st.caption(f"Router selected: **{res['routed_model']}**")
+
     col_a, col_b = st.columns(2)
 
     with col_a:
         fig1 = go.Figure()
+
         fig1.add_trace(go.Bar(
-            x=["Pooled", "Expert"],
-            y=[res['pooled_prob']*100, res['expert_prob']*100],
-            text=[f"{res['pooled_prob']:.1%}", f"{res['expert_prob']:.1%}"],
+            x=model_probs.columns,
+            y=model_probs.iloc[0] * 100,
+            text=[f"{v:.1%}" for v in model_probs.iloc[0]],
             textposition="outside",
-            marker_color=['#90A4AE', '#1E88E5']
+            marker_color=["#90A4AE", "#FFB74D", "#1E88E5", "#43A047", "#8E24AA"]
         ))
-        fig1.update_layout(title="Model Comparison", height=380, margin=dict(t=40))
+
+        fig1.update_layout(
+            title="Model Prediction Comparison",
+            yaxis_title="Predicted Probability (%)",
+            height=380,
+            margin=dict(t=45, b=40),
+            yaxis=dict(range=[0, 100])
+        )
+
         st.plotly_chart(fig1, use_container_width=True)
 
     with col_b:
-        # Dynamic Feature Contribution
-        base = {"Income": 26, "Education": 21, "Internet Access": 18, "Age": 13, "Location": 12, "Gender": 10}
-        
-        if res['income'] >= 4: base["Income"] += 9
-        elif res['income'] <= 2: base["Income"] -= 6
-        if res['education'] >= 3: base["Education"] += 8
-        if res['internet'] == "Yes": base["Internet Access"] += 7
-        if res['residence'] == "Urban": base["Location"] += 6
-        if res['age'] < 30 or res['age'] > 55: base["Age"] += 5
-
-        total = sum(base.values())
-        dynamic_contrib = {k: round(v/total*100, 1) for k,v in base.items()}
+        impact_df = get_feature_impact(res["routed_model"])
 
         fig2 = go.Figure()
+
         fig2.add_trace(go.Bar(
-            y=list(dynamic_contrib.keys()),
-            x=list(dynamic_contrib.values()),
-            orientation='h',
-            text=[f"{v:.1f}%" for v in dynamic_contrib.values()],
-            textposition='outside',
-            marker_color='#1E88E5'
+            y=impact_df["Feature"][::-1],
+            x=impact_df["Importance"][::-1],
+            orientation="h",
+            text=[f"{v:.3f}" for v in impact_df["Importance"][::-1]],
+            textposition="outside",
+            marker_color="#1E88E5"
         ))
-        fig2.update_layout(title="Key Drivers for This Profile", height=380, margin=dict(t=40))
+
+        fig2.update_layout(
+            title=f"Key Drivers - {res['routed_model']}",
+            xaxis_title="Feature Importance",
+            height=380,
+            margin=dict(t=45, b=40)
+        )
+
         st.plotly_chart(fig2, use_container_width=True)
 
-    # Final Interpretation
-    prob = res['final_prob']
-    if prob >= 0.75:
-        st.success("🟢 **HIGH** likelihood of digital financial inclusion")
-    elif prob >= 0.55:
-        st.warning("🟡 **MODERATE** likelihood of digital financial inclusion")
-    else:
-        st.error("🔴 **LOW** likelihood of digital financial inclusion")
+    st.markdown("---")
 
-# Footer
+    st.subheader("📋 Model Probability Table")
+
+    prob_table = model_probs.T.reset_index()
+    prob_table.columns = ["Model", "Probability"]
+    prob_table["Probability"] = prob_table["Probability"].map(lambda x: f"{x:.1%}")
+
+    st.dataframe(prob_table, use_container_width=True)
+
+    st.subheader("📌 Feature Impact Table")
+
+    st.dataframe(impact_df, use_container_width=True)
+
+    prob = res["final_prob"]
+
+    if prob >= 0.75:
+        st.success("🟢 HIGH likelihood of digital financial inclusion")
+    elif prob >= 0.55:
+        st.warning("🟡 MODERATE likelihood of digital financial inclusion")
+    else:
+        st.error("🔴 LOW likelihood of digital financial inclusion")
+
 st.markdown("---")
 st.markdown("**East Africa Digital Financial Inclusion Intelligence** | Research & Executive Analytics Platform © 2026")
+'''
+
+app_path = os.path.join(MODEL_PATH, "app.py")
+
+with open(app_path, "w") as f:
+    f.write(app_code)
+
+print("Streamlit app saved:")
+print(app_path)
