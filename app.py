@@ -210,20 +210,26 @@ def get_feature_impact(selected_model_name):
         "Importance": model.feature_importances_
     })
 
-    display_names = {
-        "gender": "Gender",
-        "age": "Age",
-        "educ": "Education",
-        "inc_q": "Income Quintile",
-        "urbanicity": "Residence",
-        "internet_use": "Internet Use",
-        "wgt": "Survey Weight",
-        "reg_index": "Regulatory Index",
-        "num_providers": "Mobile Money Providers",
-        "earliest_launch": "Earliest Mobile Money Launch",
-    }
+ display_names = {
+    "gender": "Gender",
+    "female": "Gender",
+    "age": "Age",
+    "educ": "Education",
+    "inc_q": "Income Quintile",
+    "urbanicity": "Residence",
+    "internet_use": "Internet Use",
+    "wgt": "Survey Weight",
+    "reg_index": "Regulatory Index",
+    "reg_cons_prot": "Consumer Protection",
+    "reg_kyc_prop": "KYC Proportionality",
+    "reg_entry_lim": "Entry Limits",
+    "reg_max_lim": "Maximum Limits",
+    "reg_agent_el": "Agent Eligibility",
+    "num_providers": "Mobile Money Providers",
+    "earliest_launch": "Mobile Money Launch Year"
+}
 
-    impact_df["Feature"] = impact_df["Feature"].replace(display_names)
+impact_df["Feature"] = impact_df["Feature"].replace(display_names)
 
     return impact_df.sort_values("Importance", ascending=False).head(10)
 
