@@ -410,12 +410,12 @@ else:
 
     prob = res["final_prob"]
 
-    if prob >= 0.75:
-        st.success("🟢 HIGH likelihood of digital financial inclusion")
-    elif prob >= 0.55:
-        st.warning("🟡 MODERATE likelihood of digital financial inclusion")
-    else:
-        st.error("🔴 LOW likelihood of digital financial inclusion")
+   if prob >= 0.90:
+    st.success("🟢 HIGH likelihood of digital financial inclusion")
+elif prob >= 0.70:
+    st.warning("🟡 MODERATE likelihood of digital financial inclusion")
+else:
+    st.error("🔴 LOW likelihood of digital financial inclusion")
 
 st.markdown("---")
 st.markdown(
