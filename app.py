@@ -123,6 +123,33 @@ country_defaults = {
 }
 
 # =========================================================
+# DISPLAY NAMES
+# =========================================================
+DISPLAY_NAMES = {
+    "gender": "Gender",
+    "female": "Gender",
+    "age": "Age",
+    "educ": "Education",
+    "inc_q": "Income Quintile",
+    "urbanicity": "Residence",
+    "internet_use": "Internet Use",
+    "wgt": "Survey Weight",
+    "reg_index": "Regulatory Index",
+    "reg_cons_prot": "Consumer Protection",
+    "reg_kyc_prop": "KYC Proportionality",
+    "reg_entry_lim": "Entry Transaction Limits",
+    "reg_max_lim": "Maximum Transaction Limits",
+    "reg_agent_el": "Agent Eligibility",
+    "num_providers": "Mobile Money Providers",
+    "earliest_launch": "Mobile Money Launch Year",
+    "mmpi_2023_Very high": "Mobile Money Prevalence",
+    "country_code_KEN": "Country: Kenya",
+    "country_code_TZA": "Country: Tanzania",
+    "country_code_UGA": "Country: Uganda",
+}
+
+
+# =========================================================
 # HELPER FUNCTIONS
 # =========================================================
 def build_input_row(
@@ -143,6 +170,7 @@ def build_input_row(
     values = {
         "age": age,
         "gender": 1 if gender == "Female" else 2,
+        "female": 1 if gender == "Female" else 0,
         "inc_q": income,
         "educ": education,
         "urbanicity": 1 if residence == "Urban" else 2,
@@ -167,8 +195,8 @@ def predict_all(input_data):
 
     expert_probs = {}
 
-    for c, model in models["expert_models"].items():
-        expert_probs[f"Expert_{c}"] = model.predict_proba(input_data)[0, 1]
+    for country_code, model in models["expert_models"].items():
+        expert_probs[f"Expert_{country_code}"] = model.predict_proba(input_data)[0, 1]
 
     model_probs = pd.DataFrame({
         "Pooled": [pooled_prob],
@@ -194,14 +222,11 @@ def predict_all(input_data):
 def get_feature_impact(selected_model_name):
     if selected_model_name == "Pooled":
         model = models["pooled_model"]
-
     elif selected_model_name == "Harmonized":
         model = models["harmonized_model"]
-
     elif selected_model_name.startswith("Expert_"):
-        country = selected_model_name.replace("Expert_", "")
-        model = models["expert_models"][country]
-
+        country_code = selected_model_name.replace("Expert_", "")
+        model = models["expert_models"][country_code]
     else:
         model = models["pooled_model"]
 
@@ -210,26 +235,7 @@ def get_feature_impact(selected_model_name):
         "Importance": model.feature_importances_
     })
 
- display_names = {
-    "gender": "Gender",
-    "female": "Gender",
-    "age": "Age",
-    "educ": "Education",
-    "inc_q": "Income Quintile",
-    "urbanicity": "Residence",
-    "internet_use": "Internet Use",
-    "wgt": "Survey Weight",
-    "reg_index": "Regulatory Index",
-    "reg_cons_prot": "Consumer Protection",
-    "reg_kyc_prop": "KYC Proportionality",
-    "reg_entry_lim": "Entry Limits",
-    "reg_max_lim": "Maximum Limits",
-    "reg_agent_el": "Agent Eligibility",
-    "num_providers": "Mobile Money Providers",
-    "earliest_launch": "Mobile Money Launch Year"
-}
-
-impact_df["Feature"] = impact_df["Feature"].replace(display_names)
+    impact_df["Feature"] = impact_df["Feature"].replace(DISPLAY_NAMES)
 
     return impact_df.sort_values("Importance", ascending=False).head(10)
 
@@ -316,8 +322,8 @@ else:
     harmonized_prob = model_probs["Harmonized"].iloc[0]
 
     expert_cols = [
-        c for c in model_probs.columns
-        if c.startswith("Expert_")
+        col for col in model_probs.columns
+        if col.startswith("Expert_")
     ]
 
     best_expert = model_probs[expert_cols].idxmax(axis=1).iloc[0]
