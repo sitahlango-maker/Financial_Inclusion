@@ -405,6 +405,7 @@ else:
 
     st.dataframe(prob_table, use_container_width=True)
 
+
        st.subheader("📌 Feature Impact Table")
     st.dataframe(impact_df, use_container_width=True)
 
