@@ -101,6 +101,7 @@ def load_models():
         "routing_model": joblib.load(os.path.join(MODEL_PATH, "routing_model.joblib")),
     }
 
+
 models = load_models()
 
 # =========================================================
@@ -124,24 +125,36 @@ country_defaults = {
 # =========================================================
 # HELPER FUNCTIONS
 # =========================================================
-def build_input_row(feature_columns, country, age, gender, residence, income, education, internet):
+def build_input_row(
+    feature_columns,
+    country,
+    age,
+    gender,
+    residence,
+    income,
+    education,
+    internet
+):
     input_data = pd.DataFrame(
         np.zeros((1, len(feature_columns))),
         columns=feature_columns
     )
-values = {
-    "age": age,
-    "gender": 1 if gender == "Female" else 2,
-    "inc_q": income,
-    "educ": education,
-    "urbanicity": 1 if residence == "Urban" else 2,
-    "internet_use": 1 if internet == "Yes" else 0,
-}
+
+    values = {
+        "age": age,
+        "gender": 1 if gender == "Female" else 2,
+        "inc_q": income,
+        "educ": education,
+        "urbanicity": 1 if residence == "Urban" else 2,
+        "internet_use": 1 if internet == "Yes" else 0,
+    }
+
     for col, value in values.items():
         if col in input_data.columns:
             input_data[col] = value
 
     country_col = f"country_code_{country}"
+
     if country_col in input_data.columns:
         input_data[country_col] = 1
 
@@ -153,6 +166,7 @@ def predict_all(input_data):
     harmonized_prob = models["harmonized_model"].predict_proba(input_data)[0, 1]
 
     expert_probs = {}
+
     for c, model in models["expert_models"].items():
         expert_probs[f"Expert_{c}"] = model.predict_proba(input_data)[0, 1]
 
@@ -162,12 +176,12 @@ def predict_all(input_data):
         **expert_probs
     })
 
-    router_input = pd.concat([input_data, model_probs], axis=1)
+    router_input = pd.concat(
+        [input_data, model_probs],
+        axis=1
+    )
 
-    try:
-        routed_model = models["routing_model"].predict(router_input)[0]
-    except Exception:
-        routed_model = model_probs.T[0].idxmax()
+    routed_model = models["routing_model"].predict(router_input)[0]
 
     if routed_model not in model_probs.columns:
         routed_model = model_probs.T[0].idxmax()
@@ -180,11 +194,14 @@ def predict_all(input_data):
 def get_feature_impact(selected_model_name):
     if selected_model_name == "Pooled":
         model = models["pooled_model"]
+
     elif selected_model_name == "Harmonized":
         model = models["harmonized_model"]
+
     elif selected_model_name.startswith("Expert_"):
         country = selected_model_name.replace("Expert_", "")
         model = models["expert_models"][country]
+
     else:
         model = models["pooled_model"]
 
@@ -193,7 +210,23 @@ def get_feature_impact(selected_model_name):
         "Importance": model.feature_importances_
     })
 
+    display_names = {
+        "gender": "Gender",
+        "age": "Age",
+        "educ": "Education",
+        "inc_q": "Income Quintile",
+        "urbanicity": "Residence",
+        "internet_use": "Internet Use",
+        "wgt": "Survey Weight",
+        "reg_index": "Regulatory Index",
+        "num_providers": "Mobile Money Providers",
+        "earliest_launch": "Earliest Mobile Money Launch",
+    }
+
+    impact_df["Feature"] = impact_df["Feature"].replace(display_names)
+
     return impact_df.sort_values("Importance", ascending=False).head(10)
+
 
 # =========================================================
 # INPUT PAGE
@@ -213,7 +246,13 @@ if st.session_state.page == "input":
         education = st.selectbox(
             "Education Level",
             [0, 1, 2, 3, 4],
-            format_func=lambda x: ["No Education", "Primary", "Secondary", "Tertiary", "Higher"][x]
+            format_func=lambda x: [
+                "No Education",
+                "Primary",
+                "Secondary",
+                "Tertiary",
+                "Higher"
+            ][x]
         )
         internet = st.radio("Internet Use", ["No", "Yes"], horizontal=True)
 
@@ -270,7 +309,11 @@ else:
     pooled_prob = model_probs["Pooled"].iloc[0]
     harmonized_prob = model_probs["Harmonized"].iloc[0]
 
-    expert_cols = [c for c in model_probs.columns if c.startswith("Expert_")]
+    expert_cols = [
+        c for c in model_probs.columns
+        if c.startswith("Expert_")
+    ]
+
     best_expert = model_probs[expert_cols].idxmax(axis=1).iloc[0]
     best_expert_prob = model_probs[best_expert].iloc[0]
 
@@ -293,7 +336,13 @@ else:
             y=model_probs.iloc[0] * 100,
             text=[f"{v:.1%}" for v in model_probs.iloc[0]],
             textposition="outside",
-            marker_color=["#90A4AE", "#FFB74D", "#1E88E5", "#43A047", "#8E24AA"]
+            marker_color=[
+                "#90A4AE",
+                "#FFB74D",
+                "#1E88E5",
+                "#43A047",
+                "#8E24AA"
+            ]
         ))
 
         fig1.update_layout(
@@ -315,7 +364,10 @@ else:
             y=impact_df["Feature"][::-1],
             x=impact_df["Importance"][::-1],
             orientation="h",
-            text=[f"{v:.3f}" for v in impact_df["Importance"][::-1]],
+            text=[
+                f"{v:.3f}"
+                for v in impact_df["Importance"][::-1]
+            ],
             textposition="outside",
             marker_color="#1E88E5"
         ))
@@ -335,12 +387,13 @@ else:
 
     prob_table = model_probs.T.reset_index()
     prob_table.columns = ["Model", "Probability"]
-    prob_table["Probability"] = prob_table["Probability"].map(lambda x: f"{x:.1%}")
+    prob_table["Probability"] = prob_table["Probability"].map(
+        lambda x: f"{x:.1%}"
+    )
 
     st.dataframe(prob_table, use_container_width=True)
 
     st.subheader("📌 Feature Impact Table")
-
     st.dataframe(impact_df, use_container_width=True)
 
     prob = res["final_prob"]
