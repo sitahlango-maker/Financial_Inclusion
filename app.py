@@ -1,13 +1,8 @@
-# ==========================================================
-# CELL 28 - GENERATE STREAMLIT APP
-# ==========================================================
-
-app_code = r'''
-import streamlit as st
-import pandas as pd
-import numpy as np
-import joblib
 import os
+import joblib
+import numpy as np
+import pandas as pd
+import streamlit as st
 import plotly.graph_objects as go
 
 # =========================================================
@@ -20,7 +15,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# EXECUTIVE UI STYLING
+# STYLING
 # =========================================================
 st.markdown("""
 <style>
@@ -85,19 +80,13 @@ st.markdown(
 )
 
 # =========================================================
-# SESSION STATE
+# PATH
 # =========================================================
-if "page" not in st.session_state:
-    st.session_state.page = "input"
-
-if "results" not in st.session_state:
-    st.session_state.results = None
+MODEL_PATH = "."
 
 # =========================================================
 # LOAD MODELS
 # =========================================================
-MODEL_PATH = "Financial_Inclusion_Models"
-
 @st.cache_resource
 def load_models():
     return {
@@ -107,33 +96,41 @@ def load_models():
         "expert_models": {
             "KEN": joblib.load(os.path.join(MODEL_PATH, "expert_model_KEN.joblib")),
             "TZA": joblib.load(os.path.join(MODEL_PATH, "expert_model_TZA.joblib")),
-            "UGA": joblib.load(os.path.join(MODEL_PATH, "expert_model_UGA.joblib"))
+            "UGA": joblib.load(os.path.join(MODEL_PATH, "expert_model_UGA.joblib")),
         },
-        "routing_model": joblib.load(os.path.join(MODEL_PATH, "routing_model.joblib"))
+        "routing_model": joblib.load(os.path.join(MODEL_PATH, "routing_model.joblib")),
     }
 
 models = load_models()
 
 # =========================================================
-# COUNTRY CONFIG
+# SESSION STATE
+# =========================================================
+if "page" not in st.session_state:
+    st.session_state.page = "input"
+
+if "results" not in st.session_state:
+    st.session_state.results = None
+
+# =========================================================
+# CONFIG
 # =========================================================
 country_defaults = {
     "KEN": {"name": "Kenya"},
     "TZA": {"name": "Tanzania"},
-    "UGA": {"name": "Uganda"}
+    "UGA": {"name": "Uganda"},
 }
 
 # =========================================================
 # HELPER FUNCTIONS
 # =========================================================
 def build_input_row(feature_columns, country, age, gender, residence, income, education, internet):
-
     input_data = pd.DataFrame(
         np.zeros((1, len(feature_columns))),
         columns=feature_columns
     )
 
-    manual_map = {
+    values = {
         "age": age,
         "female": 1 if gender == "Female" else 0,
         "inc_q": income,
@@ -142,25 +139,22 @@ def build_input_row(feature_columns, country, age, gender, residence, income, ed
         "internet_use": 1 if internet == "Yes" else 0,
     }
 
-    for col, value in manual_map.items():
+    for col, value in values.items():
         if col in input_data.columns:
             input_data[col] = value
 
-    for col in input_data.columns:
-        if col == f"country_code_{country}":
-            input_data[col] = 1
+    country_col = f"country_code_{country}"
+    if country_col in input_data.columns:
+        input_data[country_col] = 1
 
     return input_data
 
 
 def predict_all(input_data):
-
     pooled_prob = models["pooled_model"].predict_proba(input_data)[0, 1]
-
     harmonized_prob = models["harmonized_model"].predict_proba(input_data)[0, 1]
 
     expert_probs = {}
-
     for c, model in models["expert_models"].items():
         expert_probs[f"Expert_{c}"] = model.predict_proba(input_data)[0, 1]
 
@@ -170,12 +164,15 @@ def predict_all(input_data):
         **expert_probs
     })
 
-    router_input = pd.concat(
-        [input_data, model_probs],
-        axis=1
-    )
+    router_input = pd.concat([input_data, model_probs], axis=1)
 
-    routed_model = models["routing_model"].predict(router_input)[0]
+    try:
+        routed_model = models["routing_model"].predict(router_input)[0]
+    except Exception:
+        routed_model = model_probs.T[0].idxmax()
+
+    if routed_model not in model_probs.columns:
+        routed_model = model_probs.T[0].idxmax()
 
     final_prob = model_probs[routed_model].iloc[0]
 
@@ -183,27 +180,27 @@ def predict_all(input_data):
 
 
 def get_feature_impact(selected_model_name):
-
     if selected_model_name == "Pooled":
         model = models["pooled_model"]
     elif selected_model_name == "Harmonized":
         model = models["harmonized_model"]
-    else:
+    elif selected_model_name.startswith("Expert_"):
         country = selected_model_name.replace("Expert_", "")
         model = models["expert_models"][country]
+    else:
+        model = models["pooled_model"]
 
-    fi = pd.DataFrame({
+    impact_df = pd.DataFrame({
         "Feature": models["feature_columns"],
         "Importance": model.feature_importances_
     })
 
-    return fi.sort_values("Importance", ascending=False).head(10)
+    return impact_df.sort_values("Importance", ascending=False).head(10)
 
 # =========================================================
 # INPUT PAGE
 # =========================================================
 if st.session_state.page == "input":
-
     st.subheader("👤 Enter Client Profile")
 
     col1, col2, col3 = st.columns(3)
@@ -230,7 +227,6 @@ if st.session_state.page == "input":
         )
 
     if st.button("🔮 Generate Prediction", type="primary", use_container_width=True):
-
         input_data = build_input_row(
             models["feature_columns"],
             country,
@@ -248,13 +244,13 @@ if st.session_state.page == "input":
             "model_probs": model_probs,
             "routed_model": routed_model,
             "final_prob": final_prob,
+            "country": country,
             "age": age,
             "gender": gender,
             "residence": residence,
             "income": income,
             "education": education,
             "internet": internet,
-            "country": country
         }
 
         st.session_state.page = "results"
@@ -264,7 +260,6 @@ if st.session_state.page == "input":
 # RESULTS PAGE
 # =========================================================
 else:
-
     res = st.session_state.results
     model_probs = res["model_probs"]
 
@@ -360,13 +355,6 @@ else:
         st.error("🔴 LOW likelihood of digital financial inclusion")
 
 st.markdown("---")
-st.markdown("**East Africa Digital Financial Inclusion Intelligence** | Research & Executive Analytics Platform © 2026")
-'''
-
-app_path = os.path.join(MODEL_PATH, "app.py")
-
-with open(app_path, "w") as f:
-    f.write(app_code)
-
-print("Streamlit app saved:")
-print(app_path)
+st.markdown(
+    "**East Africa Digital Financial Inclusion Intelligence** | Research & Executive Analytics Platform © 2026"
+)
