@@ -128,17 +128,15 @@ def build_input_row(feature_columns, country, age, gender, residence, income, ed
     input_data = pd.DataFrame(
         np.zeros((1, len(feature_columns))),
         columns=feature_columns
-    )
-
-    values = {
-        "age": age,
-        "female": 1 if gender == "Female" else 0,
-        "inc_q": income,
-        "educ": education,
-        "urbanicity": 1 if residence == "Urban" else 0,
-        "internet_use": 1 if internet == "Yes" else 0,
-    }
-
+        
+values = {
+    "age": age,
+    "gender": 1 if gender == "Female" else 2,
+    "inc_q": income,
+    "educ": education,
+    "urbanicity": 1 if residence == "Urban" else 2,
+    "internet_use": 1 if internet == "Yes" else 0,
+}
     for col, value in values.items():
         if col in input_data.columns:
             input_data[col] = value
