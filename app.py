@@ -122,9 +122,6 @@ country_defaults = {
     "UGA": {"name": "Uganda"},
 }
 
-# =========================================================
-# DISPLAY NAMES
-# =========================================================
 DISPLAY_NAMES = {
     "gender": "Gender",
     "female": "Gender",
@@ -147,7 +144,6 @@ DISPLAY_NAMES = {
     "country_code_TZA": "Country: Tanzania",
     "country_code_UGA": "Country: Uganda",
 }
-
 
 # =========================================================
 # HELPER FUNCTIONS
@@ -209,7 +205,10 @@ def predict_all(input_data):
         axis=1
     )
 
-    routed_model = models["routing_model"].predict(router_input)[0]
+    try:
+        routed_model = models["routing_model"].predict(router_input)[0]
+    except Exception:
+        routed_model = model_probs.T[0].idxmax()
 
     if routed_model not in model_probs.columns:
         routed_model = model_probs.T[0].idxmax()
@@ -226,7 +225,7 @@ def get_feature_impact(selected_model_name):
         model = models["harmonized_model"]
     elif selected_model_name.startswith("Expert_"):
         country_code = selected_model_name.replace("Expert_", "")
-        model = models["expert_models"][country_code]
+        model = models["expert_models"].get(country_code, models["pooled_model"])
     else:
         model = models["pooled_model"]
 
@@ -238,6 +237,15 @@ def get_feature_impact(selected_model_name):
     impact_df["Feature"] = impact_df["Feature"].replace(DISPLAY_NAMES)
 
     return impact_df.sort_values("Importance", ascending=False).head(10)
+
+
+def get_likelihood_label(prob):
+    if prob >= 0.90:
+        return "HIGH", "🟢 HIGH likelihood of digital financial inclusion"
+    elif prob >= 0.70:
+        return "MODERATE", "🟡 MODERATE likelihood of digital financial inclusion"
+    else:
+        return "LOW", "🔴 LOW likelihood of digital financial inclusion"
 
 
 # =========================================================
@@ -405,17 +413,18 @@ else:
 
     st.dataframe(prob_table, use_container_width=True)
 
-       st.subheader("📌 Feature Impact Table")
+    st.subheader("📌 Feature Impact Table")
     st.dataframe(impact_df, use_container_width=True)
 
     prob = res["final_prob"]
+    likelihood, message = get_likelihood_label(prob)
 
-    if prob >= 0.90:
-        st.success("🟢 HIGH likelihood of digital financial inclusion")
-    elif prob >= 0.70:
-        st.warning("🟡 MODERATE likelihood of digital financial inclusion")
+    if likelihood == "HIGH":
+        st.success(message)
+    elif likelihood == "MODERATE":
+        st.warning(message)
     else:
-        st.error("🔴 LOW likelihood of digital financial inclusion")
+        st.error(message)
 
 st.markdown("---")
 st.markdown(
