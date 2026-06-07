@@ -386,15 +386,12 @@ else:
     col1.metric("🌐 Pooled Model", f"{pooled_prob:.1%}")
     col2.metric("🧩 Harmonized Model", f"{harmonized_prob:.1%}")
     best_expert_country = best_expert.replace("Expert_", "")
-
 country_names = {
     "KEN": "Kenya",
     "TZA": "Tanzania",
     "UGA": "Uganda"
 }
-
 best_expert_label = country_names.get(best_expert_country, best_expert_country)
-
 col3.metric(
     f"🧠 Best Expert ({best_expert_label})",
     f"{best_expert_prob:.1%}"
