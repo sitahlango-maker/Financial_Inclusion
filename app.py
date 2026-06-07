@@ -122,6 +122,12 @@ country_defaults = {
     "UGA": {"name": "Uganda"},
 }
 
+country_names = {
+    "KEN": "Kenya",
+    "TZA": "Tanzania",
+    "UGA": "Uganda",
+}
+
 DISPLAY_NAMES = {
     "gender": "Gender",
     "female": "Gender",
@@ -377,30 +383,23 @@ else:
 
     best_expert = model_probs[expert_cols].idxmax(axis=1).iloc[0]
     best_expert_prob = model_probs[best_expert].iloc[0]
+    best_expert_country = best_expert.replace("Expert_", "")
+    best_expert_label = country_names.get(best_expert_country, best_expert_country)
 
-    raw_final_prob = res["raw_final_prob"]
-    adjusted_final_prob = res["adjusted_final_prob"]
+    raw_final_prob = res.get("raw_final_prob", res.get("final_prob", 0))
+    adjusted_final_prob = res.get("adjusted_final_prob", raw_final_prob)
 
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("🌐 Pooled Model", f"{pooled_prob:.1%}")
     col2.metric("🧩 Harmonized Model", f"{harmonized_prob:.1%}")
-    best_expert_country = best_expert.replace("Expert_", "")
-country_names = {
-    "KEN": "Kenya",
-    "TZA": "Tanzania",
-    "UGA": "Uganda"
-}
-best_expert_label = country_names.get(best_expert_country, best_expert_country)
-col3.metric(
-    f"🧠 Best Expert ({best_expert_label})",
-    f"{best_expert_prob:.1%}"
-)
-col4.metric("🎯 Profile-Adjusted Score", f"{adjusted_final_prob:.1%}")
-st.caption(f"Router selected: **{res['routed_model']}**")
-st.caption(f"Raw MoE model probability before profile adjustment: **{raw_final_prob:.1%}**")
+    col3.metric(f"🧠 Best Expert ({best_expert_label})", f"{best_expert_prob:.1%}")
+    col4.metric("🎯 Profile-Adjusted Score", f"{adjusted_final_prob:.1%}")
 
-col_a, col_b = st.columns(2)
+    st.caption(f"Router selected: **{res['routed_model']}**")
+    st.caption(f"Raw MoE model probability before profile adjustment: **{raw_final_prob:.1%}**")
+
+    col_a, col_b = st.columns(2)
 
     with col_a:
         fig1 = go.Figure()
