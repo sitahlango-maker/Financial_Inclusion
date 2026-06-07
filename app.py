@@ -396,7 +396,7 @@ col3.metric(
     f"🧠 Best Expert ({best_expert_label})",
     f"{best_expert_prob:.1%}"
 )
-    col4.metric("🎯 Profile-Adjusted Score", f"{adjusted_final_prob:.1%}")
+col4.metric("🎯 Profile-Adjusted Score", f"{adjusted_final_prob:.1%}")
 
     st.caption(f"Router selected: **{res['routed_model']}**")
     st.caption(f"Raw MoE model probability before profile adjustment: **{raw_final_prob:.1%}**")
