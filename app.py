@@ -185,7 +185,33 @@ def build_input_row(
     return input_data
 
 
-def predict_all(input_data):
+def adjust_probability(raw_prob, income, education, internet, residence):
+    adjustment = 0.0
+
+    if income <= 2:
+        adjustment += 0.12
+
+    if education <= 1:
+        adjustment += 0.10
+
+    if internet == "No":
+        adjustment += 0.15
+
+    if residence == "Rural":
+        adjustment += 0.08
+
+    adjusted_prob = raw_prob - adjustment
+
+    return max(0.01, min(0.99, adjusted_prob))
+
+
+def predict_all(
+    input_data,
+    income,
+    education,
+    internet,
+    residence
+):
     pooled_prob = models["pooled_model"].predict_proba(input_data)[0, 1]
     harmonized_prob = models["harmonized_model"].predict_proba(input_data)[0, 1]
 
@@ -213,9 +239,17 @@ def predict_all(input_data):
     if routed_model not in model_probs.columns:
         routed_model = model_probs.T[0].idxmax()
 
-    final_prob = model_probs[routed_model].iloc[0]
+    raw_final_prob = model_probs[routed_model].iloc[0]
 
-    return model_probs, routed_model, final_prob
+    adjusted_final_prob = adjust_probability(
+        raw_final_prob,
+        income=income,
+        education=education,
+        internet=internet,
+        residence=residence
+    )
+
+    return model_probs, routed_model, raw_final_prob, adjusted_final_prob
 
 
 def get_feature_impact(selected_model_name):
@@ -295,12 +329,19 @@ if st.session_state.page == "input":
             internet
         )
 
-        model_probs, routed_model, final_prob = predict_all(input_data)
+        model_probs, routed_model, raw_final_prob, adjusted_final_prob = predict_all(
+            input_data,
+            income,
+            education,
+            internet,
+            residence
+        )
 
         st.session_state.results = {
             "model_probs": model_probs,
             "routed_model": routed_model,
-            "final_prob": final_prob,
+            "raw_final_prob": raw_final_prob,
+            "adjusted_final_prob": adjusted_final_prob,
             "country": country,
             "age": age,
             "gender": gender,
@@ -337,31 +378,39 @@ else:
     best_expert = model_probs[expert_cols].idxmax(axis=1).iloc[0]
     best_expert_prob = model_probs[best_expert].iloc[0]
 
+    raw_final_prob = res["raw_final_prob"]
+    adjusted_final_prob = res["adjusted_final_prob"]
+
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("🌐 Pooled Model", f"{pooled_prob:.1%}")
     col2.metric("🧩 Harmonized Model", f"{harmonized_prob:.1%}")
     col3.metric("🧠 Best Expert", f"{best_expert_prob:.1%}")
-    col4.metric("🎯 Final MoE Score", f"{res['final_prob']:.1%}")
+    col4.metric("🎯 Profile-Adjusted Score", f"{adjusted_final_prob:.1%}")
 
     st.caption(f"Router selected: **{res['routed_model']}**")
+    st.caption(f"Raw MoE model probability before profile adjustment: **{raw_final_prob:.1%}**")
 
     col_a, col_b = st.columns(2)
 
     with col_a:
         fig1 = go.Figure()
 
+        comparison_values = list(model_probs.iloc[0]) + [adjusted_final_prob]
+        comparison_labels = list(model_probs.columns) + ["Adjusted Score"]
+
         fig1.add_trace(go.Bar(
-            x=model_probs.columns,
-            y=model_probs.iloc[0] * 100,
-            text=[f"{v:.1%}" for v in model_probs.iloc[0]],
+            x=comparison_labels,
+            y=[v * 100 for v in comparison_values],
+            text=[f"{v:.1%}" for v in comparison_values],
             textposition="outside",
             marker_color=[
                 "#90A4AE",
                 "#FFB74D",
                 "#1E88E5",
                 "#43A047",
-                "#8E24AA"
+                "#8E24AA",
+                "#D84315"
             ]
         ))
 
@@ -393,8 +442,8 @@ else:
         ))
 
         fig2.update_layout(
-            title=f"Key Drivers - {res['routed_model']}",
-            xaxis_title="Feature Importance",
+            title=f"Global Feature Importance - {res['routed_model']}",
+            xaxis_title="Importance",
             height=380,
             margin=dict(t=45, b=40)
         )
@@ -406,18 +455,30 @@ else:
     st.subheader("📋 Model Probability Table")
 
     prob_table = model_probs.T.reset_index()
-    prob_table.columns = ["Model", "Probability"]
-    prob_table["Probability"] = prob_table["Probability"].map(
+    prob_table.columns = ["Model", "Raw Probability"]
+    prob_table["Raw Probability"] = prob_table["Raw Probability"].map(
         lambda x: f"{x:.1%}"
+    )
+
+    adjusted_row = pd.DataFrame({
+        "Model": ["Profile-Adjusted Score"],
+        "Raw Probability": [f"{adjusted_final_prob:.1%}"]
+    })
+
+    prob_table = pd.concat(
+        [prob_table, adjusted_row],
+        ignore_index=True
     )
 
     st.dataframe(prob_table, use_container_width=True)
 
-    st.subheader("📌 Feature Impact Table")
+    st.subheader("📌 Feature Importance Table")
+    st.caption(
+        "Feature importance is global model importance, not a personalised explanation for one individual profile."
+    )
     st.dataframe(impact_df, use_container_width=True)
 
-    prob = res["final_prob"]
-    likelihood, message = get_likelihood_label(prob)
+    likelihood, message = get_likelihood_label(adjusted_final_prob)
 
     if likelihood == "HIGH":
         st.success(message)
@@ -425,6 +486,12 @@ else:
         st.warning(message)
     else:
         st.error(message)
+
+    st.info(
+        "Note: The raw model probability reflects patterns learned from historical data. "
+        "The profile-adjusted score applies a transparent penalty for low income, low education, "
+        "no internet access, and rural residence to make the displayed decision-support score more interpretable."
+    )
 
 st.markdown("---")
 st.markdown(
