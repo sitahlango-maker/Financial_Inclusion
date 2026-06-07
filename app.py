@@ -400,7 +400,7 @@ col4.metric("🎯 Profile-Adjusted Score", f"{adjusted_final_prob:.1%}")
 st.caption(f"Router selected: **{res['routed_model']}**")
 st.caption(f"Raw MoE model probability before profile adjustment: **{raw_final_prob:.1%}**")
 
-    col_a, col_b = st.columns(2)
+col_a, col_b = st.columns(2)
 
     with col_a:
         fig1 = go.Figure()
