@@ -113,6 +113,17 @@ if "page" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = None
 
+if "last_inputs" not in st.session_state:
+    st.session_state.last_inputs = {
+        "age": 30,
+        "gender": "Male",
+        "residence": "Rural",
+        "income": 1,
+        "education": 0,
+        "internet": "No",
+        "country": "KEN",
+    }
+
 # =========================================================
 # CONFIG
 # =========================================================
@@ -126,6 +137,14 @@ country_names = {
     "KEN": "Kenya",
     "TZA": "Tanzania",
     "UGA": "Uganda",
+}
+
+education_names = {
+    0: "No Education",
+    1: "Primary",
+    2: "Secondary",
+    3: "Tertiary",
+    4: "Higher",
 }
 
 DISPLAY_NAMES = {
@@ -149,6 +168,16 @@ DISPLAY_NAMES = {
     "country_code_KEN": "Country: Kenya",
     "country_code_TZA": "Country: Tanzania",
     "country_code_UGA": "Country: Uganda",
+}
+
+DEFAULT_INPUTS = {
+    "age": 30,
+    "gender": "Male",
+    "residence": "Rural",
+    "income": 1,
+    "education": 0,
+    "internet": "No",
+    "country": "KEN",
 }
 
 # =========================================================
@@ -294,36 +323,72 @@ def get_likelihood_label(prob):
 if st.session_state.page == "input":
     st.subheader("👤 Enter Client Profile")
 
+    saved = st.session_state.last_inputs
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        age = st.slider("Age", 18, 80, 30)
-        gender = st.radio("Gender", ["Male", "Female"], horizontal=True)
-        residence = st.radio("Residence", ["Rural", "Urban"], horizontal=True)
+        age = st.slider(
+            "Age",
+            18,
+            80,
+            saved["age"]
+        )
+
+        gender = st.radio(
+            "Gender",
+            ["Male", "Female"],
+            index=["Male", "Female"].index(saved["gender"]),
+            horizontal=True
+        )
+
+        residence = st.radio(
+            "Residence",
+            ["Rural", "Urban"],
+            index=["Rural", "Urban"].index(saved["residence"]),
+            horizontal=True
+        )
 
     with col2:
-        income = st.selectbox("Income Quintile", [1, 2, 3, 4, 5])
+        income = st.selectbox(
+            "Income Quintile",
+            [1, 2, 3, 4, 5],
+            index=[1, 2, 3, 4, 5].index(saved["income"])
+        )
+
         education = st.selectbox(
             "Education Level",
             [0, 1, 2, 3, 4],
-            format_func=lambda x: [
-                "No Education",
-                "Primary",
-                "Secondary",
-                "Tertiary",
-                "Higher"
-            ][x]
+            index=[0, 1, 2, 3, 4].index(saved["education"]),
+            format_func=lambda x: education_names[x]
         )
-        internet = st.radio("Internet Use", ["No", "Yes"], horizontal=True)
+
+        internet = st.radio(
+            "Internet Use",
+            ["No", "Yes"],
+            index=["No", "Yes"].index(saved["internet"]),
+            horizontal=True
+        )
 
     with col3:
         country = st.selectbox(
             "Country",
             ["KEN", "TZA", "UGA"],
+            index=["KEN", "TZA", "UGA"].index(saved["country"]),
             format_func=lambda x: country_defaults[x]["name"]
         )
 
     if st.button("🔮 Generate Prediction", type="primary", use_container_width=True):
+        st.session_state.last_inputs = {
+            "age": age,
+            "gender": gender,
+            "residence": residence,
+            "income": income,
+            "education": education,
+            "internet": internet,
+            "country": country,
+        }
+
         input_data = build_input_row(
             models["feature_columns"],
             country,
@@ -366,12 +431,34 @@ if st.session_state.page == "input":
 else:
     res = st.session_state.results
     model_probs = res["model_probs"]
+    inputs = st.session_state.last_inputs
 
     st.subheader("📊 Prediction Results")
 
-    if st.button("🔄 New Prediction", type="secondary"):
-        st.session_state.page = "input"
-        st.rerun()
+    st.info(
+        f"Selected profile: "
+        f"Country: {country_defaults[inputs['country']]['name']} | "
+        f"Age: {inputs['age']} | "
+        f"Gender: {inputs['gender']} | "
+        f"Residence: {inputs['residence']} | "
+        f"Income Quintile: {inputs['income']} | "
+        f"Education: {education_names[inputs['education']]} | "
+        f"Internet Use: {inputs['internet']}"
+    )
+
+    btn1, btn2 = st.columns([1, 1])
+
+    with btn1:
+        if st.button("⬅️ Back / Edit Profile", type="secondary", use_container_width=True):
+            st.session_state.page = "input"
+            st.rerun()
+
+    with btn2:
+        if st.button("🔄 New Prediction", type="secondary", use_container_width=True):
+            st.session_state.last_inputs = DEFAULT_INPUTS.copy()
+            st.session_state.results = None
+            st.session_state.page = "input"
+            st.rerun()
 
     pooled_prob = model_probs["Pooled"].iloc[0]
     harmonized_prob = model_probs["Harmonized"].iloc[0]
