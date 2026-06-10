@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
+import xgboost as xgb
 
 # =========================================================
 # PAGE CONFIG
@@ -287,25 +288,67 @@ def predict_all(
     return model_probs, routed_model, raw_final_prob, adjusted_final_prob
 
 
-def get_feature_impact(selected_model_name):
+def get_model_by_name(selected_model_name):
     if selected_model_name == "Pooled":
-        model = models["pooled_model"]
-    elif selected_model_name == "Harmonized":
-        model = models["harmonized_model"]
-    elif selected_model_name.startswith("Expert_"):
-        country_code = selected_model_name.replace("Expert_", "")
-        model = models["expert_models"].get(country_code, models["pooled_model"])
-    else:
-        model = models["pooled_model"]
+        return models["pooled_model"]
 
-    impact_df = pd.DataFrame({
-        "Feature": models["feature_columns"],
-        "Importance": model.feature_importances_
-    })
+    if selected_model_name == "Harmonized":
+        return models["harmonized_model"]
+
+    if selected_model_name.startswith("Expert_"):
+        country_code = selected_model_name.replace("Expert_", "")
+        return models["expert_models"].get(country_code, models["pooled_model"])
+
+    return models["pooled_model"]
+
+
+def get_profile_feature_contribution(selected_model_name, input_data):
+    model = get_model_by_name(selected_model_name)
+
+    if hasattr(model, "feature_names_in_"):
+        model_features = list(model.feature_names_in_)
+    else:
+        model_features = models["feature_columns"]
+
+    aligned_input = input_data.reindex(
+        columns=model_features,
+        fill_value=0
+    )
+
+    try:
+        booster = model.get_booster()
+
+        dmatrix = xgb.DMatrix(
+            aligned_input,
+            feature_names=model_features
+        )
+
+        contributions = booster.predict(
+            dmatrix,
+            pred_contribs=True
+        )[0]
+
+        feature_contribs = contributions[:-1]
+
+        impact_df = pd.DataFrame({
+            "Feature": model_features,
+            "Contribution": feature_contribs,
+            "Absolute Contribution": np.abs(feature_contribs)
+        })
+
+    except Exception:
+        impact_df = pd.DataFrame({
+            "Feature": model_features,
+            "Contribution": model.feature_importances_,
+            "Absolute Contribution": np.abs(model.feature_importances_)
+        })
 
     impact_df["Feature"] = impact_df["Feature"].replace(DISPLAY_NAMES)
 
-    return impact_df.sort_values("Importance", ascending=False).head(10)
+    return impact_df.sort_values(
+        "Absolute Contribution",
+        ascending=False
+    ).head(10)
 
 
 def get_likelihood_label(prob):
@@ -413,6 +456,7 @@ if st.session_state.page == "input":
             "routed_model": routed_model,
             "raw_final_prob": raw_final_prob,
             "adjusted_final_prob": adjusted_final_prob,
+            "input_data": input_data,
             "country": country,
             "age": age,
             "gender": gender,
@@ -520,25 +564,28 @@ else:
         st.plotly_chart(fig1, use_container_width=True)
 
     with col_b:
-        impact_df = get_feature_impact(res["routed_model"])
+        impact_df = get_profile_feature_contribution(
+            res["routed_model"],
+            res["input_data"]
+        )
 
         fig2 = go.Figure()
 
         fig2.add_trace(go.Bar(
             y=impact_df["Feature"][::-1],
-            x=impact_df["Importance"][::-1],
+            x=impact_df["Contribution"][::-1],
             orientation="h",
             text=[
                 f"{v:.3f}"
-                for v in impact_df["Importance"][::-1]
+                for v in impact_df["Contribution"][::-1]
             ],
             textposition="outside",
             marker_color="#1E88E5"
         ))
 
         fig2.update_layout(
-            title=f"Global Feature Importance - {res['routed_model']}",
-            xaxis_title="Importance",
+            title=f"Profile-Specific Feature Contribution - {res['routed_model']}",
+            xaxis_title="Contribution to This Prediction",
             height=380,
             margin=dict(t=45, b=40)
         )
@@ -567,9 +614,10 @@ else:
 
     st.dataframe(prob_table, use_container_width=True)
 
-    st.subheader("📌 Feature Importance Table")
+    st.subheader("📌 Profile-Specific Feature Contribution Table")
     st.caption(
-        "Feature importance is global model importance, not a personalised explanation for one individual profile."
+        "Feature contribution shows how each variable influenced this specific profile prediction. "
+        "Positive values push the prediction higher, while negative values push it lower."
     )
     st.dataframe(impact_df, use_container_width=True)
 
