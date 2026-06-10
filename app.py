@@ -303,6 +303,7 @@ def get_model_by_name(selected_model_name):
 
 
 def get_profile_feature_contribution(selected_model_name, input_data):
+
     model = get_model_by_name(selected_model_name)
 
     if hasattr(model, "feature_names_in_"):
@@ -337,6 +338,7 @@ def get_profile_feature_contribution(selected_model_name, input_data):
         })
 
     except Exception:
+
         impact_df = pd.DataFrame({
             "Feature": model_features,
             "Contribution": model.feature_importances_,
@@ -345,11 +347,30 @@ def get_profile_feature_contribution(selected_model_name, input_data):
 
     impact_df["Feature"] = impact_df["Feature"].replace(DISPLAY_NAMES)
 
+    # =====================================================
+    # REMOVE FEATURES NOT USEFUL TO END USERS
+    # =====================================================
+
+    exclude_features = [
+        "Survey Weight",
+        "Country: Kenya",
+        "Country: Tanzania",
+        "Country: Uganda"
+    ]
+
+    impact_df = impact_df[
+        ~impact_df["Feature"].isin(exclude_features)
+    ]
+
+    # Remove features with no contribution
+    impact_df = impact_df[
+        impact_df["Absolute Contribution"] > 0
+    ]
+
     return impact_df.sort_values(
         "Absolute Contribution",
         ascending=False
     ).head(10)
-
 
 def get_likelihood_label(prob):
     if prob >= 0.90:
