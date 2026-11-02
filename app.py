@@ -334,6 +334,7 @@ else:
         if st.button("🔄 New Prediction", use_container_width=True):
             st.session_state.last_inputs = DEFAULT_INPUTS.copy()
             st.session_state.results = None
+            st.session_state.pop("country_select", None)
             st.session_state.page = "input"
             st.rerun()
 
