@@ -76,7 +76,8 @@ div[data-testid="stMetric"] {
 # =========================================================
 st.markdown("# 🌍 Digital Finance Access Predictor")
 st.markdown(
-    '<div class="subtitle">Kenya • Tanzania • Uganda • Global Findex 2021</div>',
+    '<div class="subtitle">Kenya • Tanzania • Uganda • Based on the World Bank '
+    'Global Findex 2021 survey</div>',
     unsafe_allow_html=True
 )
 
@@ -198,13 +199,21 @@ def predict_all(input_data, country):
     return probs, routed
 
 
-def feature_contributions(model_name, input_data):
-    """Per-profile contributions (TreeSHAP values computed by XGBoost)."""
+def feature_contributions(model_name, input_data, country):
+    """Per-profile contributions (TreeSHAP values computed by XGBoost).
+
+    The three country indicator columns are summed into one "Country" row,
+    so a Kenyan profile is not shown a confusing "Country: Tanzania" bar.
+    """
     booster = BASE_MODELS[model_name]
     dmatrix = xgb.DMatrix(input_data, feature_names=FEATURES)
     contribs = booster.predict(dmatrix, pred_contribs=True)[0][:-1]
 
     df = pd.DataFrame({"Feature": FEATURES, "Contribution": contribs})
+    is_country = df["Feature"].str.startswith("country_")
+    country_row = pd.DataFrame({"Feature": [f"Country ({COUNTRY_NAMES[country]})"],
+                                "Contribution": [df.loc[is_country, "Contribution"].sum()]})
+    df = pd.concat([df[~is_country], country_row], ignore_index=True)
     df["Feature"] = df["Feature"].replace(DISPLAY_NAMES)
     df["Absolute"] = df["Contribution"].abs()
     df = df[df["Absolute"] > 0].sort_values("Absolute", ascending=False)
@@ -322,7 +331,7 @@ else:
         st.plotly_chart(fig1, use_container_width=True)
 
     with col_b:
-        impact_df = feature_contributions("Pooled", res["input_data"])
+        impact_df = feature_contributions("Pooled", res["input_data"], country)
         fig2 = go.Figure(go.Bar(
             y=impact_df["Feature"][::-1],
             x=impact_df["Contribution"][::-1],
