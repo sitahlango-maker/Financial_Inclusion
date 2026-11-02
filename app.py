@@ -68,12 +68,33 @@ div[data-testid="stWidgetLabel"] p, .field-label {
     margin: 0;
 }
 
-/* Bolder outline around each input column */
-div[data-testid="stColumn"] > div[data-testid="stVerticalBlockBorderWrapper"],
+/* Soft blue panels for the input columns */
 div[data-testid="stVerticalBlockBorderWrapper"] {
-    border: 2px solid #B0C4D4 !important;
-    border-radius: 16px !important;
-    background: rgba(255,255,255,0.7);
+    border: 1px solid #C5D9EA !important;
+    border-radius: 14px !important;
+    background: #EEF5FB;
+    box-shadow: 0 2px 8px rgba(15, 43, 70, 0.06);
+}
+
+/* Mobile and small screens */
+@media (max-width: 640px) {
+    h1 { font-size: 1.9rem !important; }
+    .subtitle { font-size: 1rem; margin-bottom: 1rem; }
+    .main .block-container {
+        padding: 1rem !important;
+        border-radius: 14px;
+        margin: 0.25rem auto;
+    }
+    /* Keep the "Country" label and the map button on one line */
+    div[data-testid="stColumn"] div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+    }
+    div[data-testid="stColumn"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+        width: auto !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+    }
 }
 
 .stButton > button {
@@ -273,7 +294,7 @@ if st.session_state.page == "input":
     st.subheader("👤 Enter a Profile")
     saved = st.session_state.last_inputs
 
-    col1, col2, col3 = st.columns(3, gap="large", border=True)
+    col1, col2, col3 = st.columns(3, gap="small", border=True)
 
     with col1:
         age = st.slider("Age", 15, 90, saved["age"])
