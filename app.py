@@ -119,11 +119,8 @@ INCOME_NAMES = {
     5: "Richest 20% of households",
 }
 INCOME_HELP = (
-    "Where the household's income ranks compared with other households in the "
-    "SAME country, split into five equal groups. For example, 'Middle 20%' means "
-    "about 40% of households in that country earn less and 40% earn more. "
-    "It is a ranking, not a fixed amount, so the same income can fall in "
-    "different groups in Kenya, Tanzania and Uganda."
+    "Ranked against other households in the same country. "
+    "'Middle 20%' means about 40% earn less and 40% earn more."
 )
 
 MODEL_LABELS = {
@@ -272,8 +269,8 @@ if st.session_state.page == "input":
     with col2:
         income = st.selectbox("Household income level (within country)", [1, 2, 3, 4, 5],
                               index=[1, 2, 3, 4, 5].index(saved["income"]),
-                              format_func=lambda x: INCOME_NAMES[x],
-                              help=INCOME_HELP)
+                              format_func=lambda x: INCOME_NAMES[x])
+        st.caption(INCOME_HELP)
         education = st.selectbox("Education level", [1, 2, 3],
                                  index=[1, 2, 3].index(saved["education"]),
                                  format_func=lambda x: EDUCATION_NAMES[x])
