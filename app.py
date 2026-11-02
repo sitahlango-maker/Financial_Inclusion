@@ -60,6 +60,22 @@ div[data-testid="stMetric"] {
     box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
 
+/* Larger, bolder field labels */
+div[data-testid="stWidgetLabel"] p, .field-label {
+    font-size: 1.08rem !important;
+    font-weight: 600 !important;
+    color: #0F2B46;
+    margin: 0;
+}
+
+/* Bolder outline around each input column */
+div[data-testid="stColumn"] > div[data-testid="stVerticalBlockBorderWrapper"],
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    border: 2px solid #B0C4D4 !important;
+    border-radius: 16px !important;
+    background: rgba(255,255,255,0.7);
+}
+
 .stButton > button {
     background: linear-gradient(90deg, #1E88E5, #1565C0);
     color: white;
@@ -257,7 +273,7 @@ if st.session_state.page == "input":
     st.subheader("👤 Enter a Profile")
     saved = st.session_state.last_inputs
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(3, gap="large", border=True)
 
     with col1:
         age = st.slider("Age", 15, 90, saved["age"])
@@ -280,10 +296,10 @@ if st.session_state.page == "input":
     with col3:
         # Label row: "Country" with a small map button that opens a pop-up map
         label_col, map_col = st.columns([4, 1], vertical_alignment="bottom")
-        label_col.markdown("Country")
+        label_col.markdown('<p class="field-label">Country</p>', unsafe_allow_html=True)
         shown = st.session_state.get("country_select", saved["country"])
         with map_col.popover("🗺️", help="Show on a map"):
-            st.plotly_chart(country_map(shown), use_container_width=True,
+            st.plotly_chart(country_map(shown), width="stretch",
                             config={"displayModeBar": False})
             st.caption(f"{COUNTRY_NAMES[shown]}: "
                        f"{INFO['country_base_rate'][shown]:.0%} of survey respondents "
@@ -293,7 +309,7 @@ if st.session_state.page == "input":
                                format_func=lambda x: COUNTRY_NAMES[x],
                                key="country_select", label_visibility="collapsed")
 
-    if st.button("🔮 Generate Prediction", type="primary", use_container_width=True):
+    if st.button("🔮 Generate Prediction", type="primary", width="stretch"):
         inputs = {"age": age, "gender": gender, "residence": residence, "income": income,
                   "education": education, "internet": internet, "country": country}
         st.session_state.last_inputs = inputs
@@ -324,11 +340,11 @@ else:
 
     btn1, btn2 = st.columns(2)
     with btn1:
-        if st.button("⬅️ Back / Edit Profile", use_container_width=True):
+        if st.button("⬅️ Back / Edit Profile", width="stretch"):
             st.session_state.page = "input"
             st.rerun()
     with btn2:
-        if st.button("🔄 New Prediction", use_container_width=True):
+        if st.button("🔄 New Prediction", width="stretch"):
             st.session_state.last_inputs = DEFAULT_INPUTS.copy()
             st.session_state.results = None
             st.session_state.pop("country_select", None)
@@ -364,7 +380,7 @@ else:
         fig1.update_layout(title="Model Estimates for This Profile",
                            yaxis_title="Probability (%)", yaxis=dict(range=[0, 105]),
                            height=380, margin=dict(t=45, b=40))
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width="stretch")
 
     with col_b:
         impact_df = feature_contributions("Pooled", res["input_data"], country)
@@ -381,7 +397,7 @@ else:
                            xaxis_title="Push towards (+) or away from (−) having an account "
                                        "(log-odds)",
                            height=380, margin=dict(t=45, b=40))
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
     kind, message = likelihood_message(main_prob)
     getattr(st, kind)(message)
@@ -392,12 +408,12 @@ else:
         "Model": [MODEL_LABELS[m] for m in MODEL_LABELS],
         "Probability": [f"{probs[m]:.1%}" for m in MODEL_LABELS],
     })
-    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.dataframe(table, width="stretch", hide_index=True)
 
     st.subheader("📌 Feature Contribution Table (Pooled model)")
     st.caption("Positive values push the estimate up; negative values push it down. "
                "Values are TreeSHAP contributions in log-odds.")
-    st.dataframe(impact_df.round(3), use_container_width=True, hide_index=True)
+    st.dataframe(impact_df.round(3), width="stretch", hide_index=True)
 
     st.info(
         "These are statistical estimates from survey data (Global Findex 2021, about 1,000 "
