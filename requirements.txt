@@ -1,10 +1,8 @@
-# Versions are pinned after training (see models/model_info.json),
-# because saved models must be loaded with the same scikit-learn version.
+# Runtime dependencies for app.py (installed on the VMs).
+# Models are saved in XGBoost's JSON format, so no scikit-learn or pickle
+# version matching is needed at runtime.
 streamlit
 pandas
 numpy
-joblib
-scikit-learn
-xgboost
 plotly
-matplotlib
+xgboost>=3.0,<4

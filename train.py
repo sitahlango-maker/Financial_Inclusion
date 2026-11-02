@@ -34,7 +34,6 @@ import joblib
 import numpy as np
 import pandas as pd
 import sklearn
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (accuracy_score, balanced_accuracy_score,
                              brier_score_loss, f1_score, roc_auc_score)
@@ -100,6 +99,18 @@ def make_gbm():
                                           max_iter=300, random_state=SEED)
 
 
+def make_router():
+    """Multi-class model that picks a base model per row (saved as XGBoost JSON)."""
+    if HAVE_XGB:
+        return xgb.XGBClassifier(
+            objective="multi:softprob", n_estimators=200, max_depth=4,
+            learning_rate=0.05, subsample=0.9, colsample_bytree=0.9,
+            random_state=SEED, n_jobs=2,
+        )
+    return HistGradientBoostingClassifier(max_depth=4, learning_rate=0.05,
+                                          max_iter=200, random_state=SEED)
+
+
 def make_logreg():
     return make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000))
 
@@ -144,21 +155,23 @@ def fit_all(X, y, country):
         oof.iloc[va] = base_probs(fold_models, X.iloc[va]).values
 
     router_X = pd.concat([X, oof], axis=1)
-    router = RandomForestClassifier(n_estimators=200, max_depth=8, min_samples_leaf=5,
-                                    random_state=SEED, n_jobs=2)
-    router.fit(router_X, routing_labels(oof, y))
+    labels = routing_labels(oof, y)
+    classes = sorted(labels.unique())
+    router = make_router().fit(router_X, labels.map({c: i for i, c in enumerate(classes)}))
 
     return {
         "base": fit_base(X, y, country),
         "router": router,
         "router_columns": router_X.columns.tolist(),
+        "router_classes": classes,
         "logreg": make_logreg().fit(X, y),
     }
 
 
 def predict_all(bundle, X):
     probs = base_probs(bundle["base"], X)
-    routed = bundle["router"].predict(pd.concat([X, probs], axis=1)[bundle["router_columns"]])
+    codes = bundle["router"].predict(pd.concat([X, probs], axis=1)[bundle["router_columns"]])
+    routed = [bundle["router_classes"][int(i)] for i in np.ravel(codes)]
     probs["MoE_Router"] = [probs.loc[i, m] for i, m in zip(X.index, routed)]
     # Classic mixture of experts: each person goes to their own country's expert
     gate = X[COUNTRY_FEATURES].idxmax(axis=1).str.replace("country_", "Expert_")
@@ -291,10 +304,14 @@ def main():
             model.save_model(os.path.join(args.models, f"{name}.json"))
         else:
             joblib.dump(model, os.path.join(args.models, f"{name}.joblib"))
-    joblib.dump(bundle["router"], os.path.join(args.models, "router.joblib"), compress=3)
+    if HAVE_XGB:
+        bundle["router"].save_model(os.path.join(args.models, "router.json"))
+    else:
+        joblib.dump(bundle["router"], os.path.join(args.models, "router.joblib"))
     info = {
         "features": FEATURES,
         "router_columns": bundle["router_columns"],
+        "router_classes": bundle["router_classes"],
         "base_models": BASE_MODELS,
         "country_base_rate": df.groupby("country_code")[TARGET].mean().round(4).to_dict(),
         "codes": {"female": {"1": "Female", "2": "Male"},

@@ -1,7 +1,6 @@
 import json
 import os
 
-import joblib
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -98,7 +97,8 @@ def load_models():
         model.load_model(os.path.join(MODEL_PATH, f"{name}.json"))
         base[name] = model
 
-    router = joblib.load(os.path.join(MODEL_PATH, "router.joblib"))
+    router = xgb.XGBClassifier()
+    router.load_model(os.path.join(MODEL_PATH, "router.json"))
     return info, base, router
 
 
@@ -177,7 +177,7 @@ def predict_all(input_data, country):
     router_input = pd.concat(
         [input_data, pd.DataFrame([probs])[INFO["base_models"]]], axis=1
     )[INFO["router_columns"]]
-    routed = str(ROUTER.predict(router_input)[0])
+    routed = INFO["router_classes"][int(ROUTER.predict(router_input)[0])]
 
     probs["MoE_CountryGate"] = probs[f"Expert_{country}"]
     probs["MoE_Router"] = probs[routed]
