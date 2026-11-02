@@ -242,7 +242,7 @@ def country_map(selected):
         showland=True, landcolor="#F5F7F8",
         showlakes=True, lakecolor="#E3F2FD",
     )
-    fig.update_layout(height=230, margin=dict(l=0, r=0, t=0, b=0),
+    fig.update_layout(height=200, width=260, margin=dict(l=0, r=0, t=0, b=0),
                       paper_bgcolor="rgba(0,0,0,0)")
     return fig
 
@@ -281,14 +281,20 @@ if st.session_state.page == "input":
                             index=["No", "Yes"].index(saved["internet"]), horizontal=True)
 
     with col3:
+        # Label row: "Country" with a small map button that opens a pop-up map
+        label_col, map_col = st.columns([4, 1], vertical_alignment="bottom")
+        label_col.markdown("Country")
+        shown = st.session_state.get("country_select", saved["country"])
+        with map_col.popover("🗺️", help="Show on a map"):
+            st.plotly_chart(country_map(shown), use_container_width=True,
+                            config={"displayModeBar": False})
+            st.caption(f"{COUNTRY_NAMES[shown]}: "
+                       f"{INFO['country_base_rate'][shown]:.0%} of survey respondents "
+                       "have a digital financial account.")
         country = st.selectbox("Country", list(COUNTRY_NAMES),
                                index=list(COUNTRY_NAMES).index(saved["country"]),
-                               format_func=lambda x: COUNTRY_NAMES[x])
-        st.plotly_chart(country_map(country), use_container_width=True,
-                        config={"displayModeBar": False})
-        st.caption(f"{COUNTRY_NAMES[country]}: "
-                   f"{INFO['country_base_rate'][country]:.0%} of survey respondents "
-                   "have a digital financial account.")
+                               format_func=lambda x: COUNTRY_NAMES[x],
+                               key="country_select", label_visibility="collapsed")
 
     if st.button("🔮 Generate Prediction", type="primary", use_container_width=True):
         inputs = {"age": age, "gender": gender, "residence": residence, "income": income,
