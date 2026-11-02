@@ -1,9 +1,9 @@
+# Runtime dependencies for app.py (installed on the VMs).
+# Models are saved in XGBoost's JSON format, so no scikit-learn or pickle
+# version matching is needed at runtime.
 streamlit
 pandas
 numpy
-joblib
-scikit-learn
 plotly
-xgboost
-matplotlib
-seaborn
+# CPU-only build: same "import xgboost", without the ~200 MB GPU (NCCL) library
+xgboost-cpu>=3.0,<4

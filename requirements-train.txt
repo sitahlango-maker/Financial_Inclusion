@@ -1,0 +1,5 @@
+# Extra dependencies for train.py
+-r requirements.txt
+scikit-learn
+joblib
+matplotlib

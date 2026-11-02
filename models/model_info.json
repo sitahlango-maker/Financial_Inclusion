@@ -1,0 +1,72 @@
+{
+  "features": [
+    "female",
+    "age",
+    "educ",
+    "inc_q",
+    "urbanicity",
+    "internet_use",
+    "country_KEN",
+    "country_TZA",
+    "country_UGA"
+  ],
+  "router_columns": [
+    "female",
+    "age",
+    "educ",
+    "inc_q",
+    "urbanicity",
+    "internet_use",
+    "country_KEN",
+    "country_TZA",
+    "country_UGA",
+    "Pooled",
+    "Harmonized",
+    "Expert_KEN",
+    "Expert_TZA",
+    "Expert_UGA"
+  ],
+  "router_classes": [
+    "Expert_KEN",
+    "Expert_TZA",
+    "Expert_UGA",
+    "Harmonized",
+    "Pooled"
+  ],
+  "base_models": [
+    "Pooled",
+    "Harmonized",
+    "Expert_KEN",
+    "Expert_TZA",
+    "Expert_UGA"
+  ],
+  "country_base_rate": {
+    "KEN": 0.9079,
+    "TZA": 0.611,
+    "UGA": 0.7625
+  },
+  "codes": {
+    "female": {
+      "1": "Female",
+      "2": "Male"
+    },
+    "urbanicity": {
+      "1": "Rural",
+      "2": "Urban"
+    },
+    "educ": {
+      "1": "Primary or less",
+      "2": "Secondary",
+      "3": "Tertiary or more"
+    },
+    "inc_q": "1 = poorest 20% ... 5 = richest 20% (within country)"
+  },
+  "engine": "xgboost",
+  "versions": {
+    "python": "3.12.3",
+    "sklearn": "1.9.1",
+    "xgboost": "3.4.1",
+    "pandas": "3.1.0",
+    "numpy": "2.5.4"
+  }
+}
