@@ -110,7 +110,20 @@ COUNTRY_NAMES = {"KEN": "Kenya", "TZA": "Tanzania", "UGA": "Uganda"}
 GENDER_CODES = {"Female": 1, "Male": 2}
 RESIDENCE_CODES = {"Rural": 1, "Urban": 2}
 EDUCATION_NAMES = {1: "Primary or less", 2: "Secondary", 3: "Tertiary or more"}
-INCOME_NAMES = {1: "1 (poorest 20%)", 2: "2", 3: "3", 4: "4", 5: "5 (richest 20%)"}
+INCOME_NAMES = {
+    1: "Poorest 20% of households",
+    2: "Below average (second 20%)",
+    3: "Middle 20%",
+    4: "Above average (fourth 20%)",
+    5: "Richest 20% of households",
+}
+INCOME_HELP = (
+    "Where the household's income ranks compared with other households in the "
+    "SAME country, split into five equal groups. For example, 'Middle 20%' means "
+    "about 40% of households in that country earn less and 40% earn more. "
+    "It is a ranking, not a fixed amount, so the same income can fall in "
+    "different groups in Kenya, Tanzania and Uganda."
+)
 
 MODEL_LABELS = {
     "Pooled": "Pooled (main estimate)",
@@ -126,7 +139,7 @@ DISPLAY_NAMES = {
     "female": "Gender",
     "age": "Age",
     "educ": "Education",
-    "inc_q": "Income quintile",
+    "inc_q": "Household income level",
     "urbanicity": "Residence",
     "internet_use": "Internet use",
     "country_KEN": "Country: Kenya",
@@ -221,9 +234,10 @@ if st.session_state.page == "input":
                              index=["Rural", "Urban"].index(saved["residence"]), horizontal=True)
 
     with col2:
-        income = st.selectbox("Income quintile (within country)", [1, 2, 3, 4, 5],
+        income = st.selectbox("Household income level (within country)", [1, 2, 3, 4, 5],
                               index=[1, 2, 3, 4, 5].index(saved["income"]),
-                              format_func=lambda x: INCOME_NAMES[x])
+                              format_func=lambda x: INCOME_NAMES[x],
+                              help=INCOME_HELP)
         education = st.selectbox("Education level", [1, 2, 3],
                                  index=[1, 2, 3].index(saved["education"]),
                                  format_func=lambda x: EDUCATION_NAMES[x])
@@ -260,7 +274,7 @@ else:
     st.subheader("📊 Prediction Results")
     st.info(
         f"Profile: {COUNTRY_NAMES[country]} | Age {inputs['age']} | {inputs['gender']} | "
-        f"{inputs['residence']} | Income quintile {inputs['income']} | "
+        f"{inputs['residence']} | Income: {INCOME_NAMES[inputs['income']]} | "
         f"{EDUCATION_NAMES[inputs['education']]} | Internet: {inputs['internet']}"
     )
 
