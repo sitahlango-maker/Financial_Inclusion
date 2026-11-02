@@ -91,14 +91,12 @@ def load_models():
     with open(os.path.join(MODEL_PATH, "model_info.json")) as f:
         info = json.load(f)
 
+    # Plain XGBoost Boosters: no scikit-learn needed at runtime
     base = {}
     for name in info["base_models"]:
-        model = xgb.XGBClassifier()
-        model.load_model(os.path.join(MODEL_PATH, f"{name}.json"))
-        base[name] = model
+        base[name] = xgb.Booster(model_file=os.path.join(MODEL_PATH, f"{name}.json"))
 
-    router = xgb.XGBClassifier()
-    router.load_model(os.path.join(MODEL_PATH, "router.json"))
+    router = xgb.Booster(model_file=os.path.join(MODEL_PATH, "router.json"))
     return info, base, router
 
 
@@ -172,12 +170,15 @@ def build_input_row(inputs):
 
 
 def predict_all(input_data, country):
-    probs = {name: float(m.predict_proba(input_data)[0, 1]) for name, m in BASE_MODELS.items()}
+    dmatrix = xgb.DMatrix(input_data, feature_names=FEATURES)
+    # binary:logistic boosters return the probability of class 1
+    probs = {name: float(m.predict(dmatrix)[0]) for name, m in BASE_MODELS.items()}
 
     router_input = pd.concat(
         [input_data, pd.DataFrame([probs])[INFO["base_models"]]], axis=1
     )[INFO["router_columns"]]
-    routed = INFO["router_classes"][int(ROUTER.predict(router_input)[0])]
+    router_probs = ROUTER.predict(xgb.DMatrix(router_input, feature_names=INFO["router_columns"]))
+    routed = INFO["router_classes"][int(router_probs[0].argmax())]
 
     probs["MoE_CountryGate"] = probs[f"Expert_{country}"]
     probs["MoE_Router"] = probs[routed]
@@ -186,7 +187,7 @@ def predict_all(input_data, country):
 
 def feature_contributions(model_name, input_data):
     """Per-profile contributions (TreeSHAP values computed by XGBoost)."""
-    booster = BASE_MODELS[model_name].get_booster()
+    booster = BASE_MODELS[model_name]
     dmatrix = xgb.DMatrix(input_data, feature_names=FEATURES)
     contribs = booster.predict(dmatrix, pred_contribs=True)[0][:-1]
 
