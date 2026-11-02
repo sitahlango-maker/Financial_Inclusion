@@ -220,6 +220,33 @@ def feature_contributions(model_name, input_data, country):
     return df.drop(columns="Absolute")
 
 
+def country_map(selected):
+    """Small map of the three countries, with the selected one highlighted."""
+    codes = list(COUNTRY_NAMES)
+    rates = INFO["country_base_rate"]
+    fig = go.Figure(go.Choropleth(
+        locations=codes,
+        locationmode="ISO-3",
+        z=[1 if c == selected else 0 for c in codes],
+        zmin=0, zmax=1,
+        colorscale=[[0, "#CFD8DC"], [1, "#1E88E5"]],
+        showscale=False,
+        marker_line_color="white",
+        marker_line_width=1.5,
+        text=[f"{COUNTRY_NAMES[c]}: {rates[c]:.0%} have a digital account" for c in codes],
+        hoverinfo="text",
+    ))
+    fig.update_geos(
+        fitbounds="locations", visible=False,
+        showcountries=True, countrycolor="#ECEFF1",
+        showland=True, landcolor="#F5F7F8",
+        showlakes=True, lakecolor="#E3F2FD",
+    )
+    fig.update_layout(height=230, margin=dict(l=0, r=0, t=0, b=0),
+                      paper_bgcolor="rgba(0,0,0,0)")
+    return fig
+
+
 def likelihood_message(prob):
     if prob >= 0.5:
         return "success", "🟢 This profile is LIKELY to have a digital financial account."
@@ -257,6 +284,11 @@ if st.session_state.page == "input":
         country = st.selectbox("Country", list(COUNTRY_NAMES),
                                index=list(COUNTRY_NAMES).index(saved["country"]),
                                format_func=lambda x: COUNTRY_NAMES[x])
+        st.plotly_chart(country_map(country), use_container_width=True,
+                        config={"displayModeBar": False})
+        st.caption(f"{COUNTRY_NAMES[country]}: "
+                   f"{INFO['country_base_rate'][country]:.0%} of survey respondents "
+                   "have a digital financial account.")
 
     if st.button("🔮 Generate Prediction", type="primary", use_container_width=True):
         inputs = {"age": age, "gender": gender, "residence": residence, "income": income,
