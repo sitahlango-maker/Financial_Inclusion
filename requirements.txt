@@ -5,4 +5,5 @@ streamlit
 pandas
 numpy
 plotly
-xgboost>=3.0,<4
+# CPU-only build: same "import xgboost", without the ~200 MB GPU (NCCL) library
+xgboost-cpu>=3.0,<4
